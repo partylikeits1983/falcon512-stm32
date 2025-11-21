@@ -1,6 +1,30 @@
-[package]
-name = "falcon512-stm32"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "falcon-rust",
+    "stm32",
+]
+resolver = "2"
 
-[dependencies]
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug-assertions = false
+overflow-checks = false
+incremental = false
+strip = "symbols"
+
+[profile.dev]
+opt-level = 1
+panic = "abort"
+
+[profile.test]
+opt-level = 1
+panic = "abort"
+
+[profile.test.package.proptest]
+opt-level = 3
+
+[profile.test.package.rand_chacha]
+opt-level = 3

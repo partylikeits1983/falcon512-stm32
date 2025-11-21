@@ -1,0 +1,21 @@
+[build]
+# Target for STM32F4 series (Cortex-M4F)
+# Adjust this for your specific STM32 chip:
+# - STM32F0/L0: thumbv6m-none-eabi
+# - STM32F1/F2/L1: thumbv7m-none-eabi
+# - STM32F3/F4/L4: thumbv7em-none-eabihf (with FPU)
+# - STM32F7/H7: thumbv7em-none-eabihf
+target = "thumbv7em-none-eabihf"
+
+[target.thumbv7em-none-eabihf]
+# Use LLD linker for faster builds
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tmemory.x",
+]
+
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = "probe-rs run --chip STM32F407VGTx"
+# Alternative runners:
+# runner = "arm-none-eabi-gdb -q -x openocd.gdb"
+# runner = "pyocd gdb --target stm32f407vg"

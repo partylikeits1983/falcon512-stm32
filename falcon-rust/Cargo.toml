@@ -1,0 +1,39 @@
+[package]
+name = "falcon-rust"
+version = "0.1.2"
+edition = "2021"
+description = "A rust implementation of the Falcon post-quantum digital signature scheme."
+license = "MIT"
+repository = "https://github.com/aszepieniec/falcon-rust"
+documentation = "https://docs.rs/falcon-rust/latest/falcon_rust/"
+homepage = "https://github.com/aszepieniec/falcon-rust"
+readme = "../README.md"
+keywords = ["falcon", "signature", "post-quantum"]
+categories = ["cryptography"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bit-vec = { version = "0.6", default-features = false }
+itertools = { version = "0.12.0", default-features = false, features = ["use_alloc"] }
+hex = { version = "0.4.3", default-features = false, features = ["alloc"] }
+num-complex = { version = "0.4.4", default-features = false, features = ["libm"] }
+num = { version = "0.4.1", default-features = false, features = ["alloc"] }
+rand_core = { version = "0.6", default-features = false }
+rand_chacha = { version = "0.3.1", default-features = false }
+sha3 = { version = "0.10.8", default-features = false }
+libm = "0.2"
+
+[dev-dependencies]
+proptest = "1.4.0"
+proptest-derive = "0.4.0"
+arbitrary = "1.3.2"
+test-strategy = "0.3.1"
+rand = "0.8.5"
+
+# External falcon-rust crate for cross-implementation validation
+# Using package rename to avoid name collision with our own crate
+[dev-dependencies.falcon-rust-external]
+package = "falcon-rust"
+version = "0.1.2"
+

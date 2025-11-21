@@ -1,0 +1,38 @@
+[package]
+name = "falcon512-stm32"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+
+[dependencies]
+# Falcon signature library
+falcon-rust = { path = "../falcon-rust", default-features = false }
+
+# Embedded runtime
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+
+# Memory allocator for embedded systems
+embedded-alloc = "0.5"
+
+# Panic handler
+panic-halt = "0.2"
+
+# Random number generation (using ChaCha20 for deterministic testing)
+rand_core = { version = "0.6", default-features = false }
+rand_chacha = { version = "0.3", default-features = false }
+
+# Optional: STM32 HAL - uncomment and modify for your specific STM32 chip
+# stm32f4xx-hal = { version = "0.21", features = ["stm32f407"] }
+
+[profile.release]
+opt-level = "z"     # Optimize for size
+lto = true          # Enable link-time optimization
+codegen-units = 1   # Better optimization
+debug = false       # Disable debug info
+strip = true        # Strip symbols
+panic = "abort"     # Abort on panic
+overflow-checks = false
+
+[profile.dev]
+opt-level = 1       # Some optimization for reasonable performance
