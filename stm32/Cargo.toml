@@ -25,14 +25,3 @@ rand_chacha = { version = "0.3", default-features = false }
 # Optional: STM32 HAL - uncomment and modify for your specific STM32 chip
 # stm32f4xx-hal = { version = "0.21", features = ["stm32f407"] }
 
-[profile.release]
-opt-level = "z"     # Optimize for size
-lto = true          # Enable link-time optimization
-codegen-units = 1   # Better optimization
-debug = false       # Disable debug info
-strip = true        # Strip symbols
-panic = "abort"     # Abort on panic
-overflow-checks = false
-
-[profile.dev]
-opt-level = 1       # Some optimization for reasonable performance

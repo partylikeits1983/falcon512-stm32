@@ -14,16 +14,31 @@ use embedded_alloc::Heap;
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
-/// Simple example demonstrating Falcon512 signing on STM32
+// ====== KEY STORAGE IN FLASH ======
+// Keys are stored in a reserved flash section (see memory.x)
+// Flash address: 0x080FE000 (last 8KB of 1MB flash)
+// Layout:
+//   - Bytes 0-1280: Secret key (1281 bytes)
+//   - Bytes 1281-2177: Public key (897 bytes)
+//   - Remaining: unused/padding
+const KEYS_FLASH_ADDR: usize = 0x080FE000;
+const SK_SIZE: usize = 1281;
+const PK_SIZE: usize = 897;
+
+/// Simple example demonstrating Falcon512 signing on STM32 with pre-generated keys
 ///
 /// This example shows:
-/// 1. Key generation from a seed
+/// 1. Loading pre-generated keys from flash memory
 /// 2. Signing a message
 /// 3. Verifying the signature
 ///
+/// Key generation workflow:
+/// 1. Run keygen tool on laptop: `cd keygen && cargo run --release`
+/// 2. Flash keys to reserved section using flash_keys tool
+/// 3. Flash and run this firmware
+///
 /// In a real application, you would:
-/// - Use hardware RNG for seed generation
-/// - Store keys in secure storage
+/// - Use hardware RNG for signing randomness (not key generation!)
 /// - Handle errors appropriately
 /// - Use serial/UART for communication
 #[entry]
@@ -37,18 +52,28 @@ fn main() -> ! {
         unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
     }
 
-    // Initialize RNG with a seed
+    // Initialize RNG for signing randomness ONLY
     // NOTE: In production, use hardware RNG from your STM32 chip!
-    // Example: let mut rng = stm32f4xx_hal::rng::Rng::new(device.RNG, &clocks);
+    // Example: let mut rng = stm32h7xx_hal::rng::Rng::new(device.RNG, &clocks);
     let seed = [0x42u8; 32]; // DO NOT use fixed seed in production!
     let mut rng = ChaCha20Rng::from_seed(seed);
 
-    // Generate a seed for key generation
-    let mut keygen_seed = [0u8; 32];
-    rng.fill_bytes(&mut keygen_seed);
+    // Load pre-generated keys from flash memory
+    // SAFETY: Reading from flash memory at a fixed address
+    // The keys must be flashed to this address using the flash_keys tool
+    let sk_bytes: &[u8] = unsafe {
+        core::slice::from_raw_parts(KEYS_FLASH_ADDR as *const u8, SK_SIZE)
+    };
+    let pk_bytes: &[u8] = unsafe {
+        core::slice::from_raw_parts((KEYS_FLASH_ADDR + SK_SIZE) as *const u8, PK_SIZE)
+    };
 
-    // Generate Falcon512 key pair
-    let (secret_key, public_key) = falcon512::keygen(keygen_seed);
+    // Reconstruct keys from bytes
+    // Note: If keys haven't been flashed yet (all zeros), this will fail
+    let secret_key = falcon512::SecretKey::from_bytes(sk_bytes)
+        .expect("Failed to load secret key - have you flashed keys using flash_keys tool?");
+    let public_key = falcon512::PublicKey::from_bytes(pk_bytes)
+        .expect("Failed to load public key - have you flashed keys using flash_keys tool?");
 
     // Message to sign
     let message = b"Hello from STM32 with Falcon512!";
@@ -72,15 +97,10 @@ fn main() -> ! {
         // Example: toggle_led_red();
     }
 
-    // Example: Serialize keys and signature for storage/transmission
-    let _sk_bytes = secret_key.to_bytes();
-    let _pk_bytes = public_key.to_bytes();
+    // Serialize signature for transmission
     let _sig_bytes = signature.to_bytes();
 
-    // Example sizes for Falcon512:
-    // - Secret key: ~1281 bytes
-    // - Public key: ~897 bytes
-    // - Signature: variable, typically ~666 bytes
+    // Signature size for Falcon512: variable, typically ~666 bytes
 
     loop {
         // Infinite loop - embedded systems don't exit

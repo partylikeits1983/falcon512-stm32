@@ -1,1 +1,8 @@
 /target
+
+# Cryptographic keys - NEVER commit these!
+secret_key.bin
+public_key.bin
+keys.bin
+*_device*.bin
+*.key

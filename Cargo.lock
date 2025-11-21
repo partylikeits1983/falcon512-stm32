@@ -175,6 +175,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "falcon-keygen"
+version = "0.1.0"
+dependencies = [
+ "falcon-rust 0.1.2",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
+]
+
+[[package]]
 name = "falcon-rust"
 version = "0.1.2"
 dependencies = [

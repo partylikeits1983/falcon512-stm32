@@ -4,7 +4,13 @@
 MEMORY
 {
   /* Flash memory - where your program code lives */
-  FLASH : ORIGIN = 0x08000000, LENGTH = 1024K
+  /* Reserve last 8KB for cryptographic keys (1024K - 8K = 1016K) */
+  FLASH : ORIGIN = 0x08000000, LENGTH = 1016K
+  
+  /* Reserved flash section for Falcon512 keys */
+  /* Located at end of flash: 0x08000000 + 1016K = 0x080FE000 */
+  /* Size: 8KB (more than enough for SK=1281 bytes + PK=897 bytes = 2178 bytes) */
+  KEYS : ORIGIN = 0x080FE000, LENGTH = 8K
   
   /* RAM - where your program's data and stack live */
   /* Note: Falcon512 requires significant stack space! */

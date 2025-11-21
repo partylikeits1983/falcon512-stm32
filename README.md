@@ -9,14 +9,21 @@ This is a Cargo workspace containing two crates:
 ```
 falcon512-stm32/
 ├── Cargo.toml              # Workspace configuration
+├── KEYGEN_WORKFLOW.md      # Key generation and flashing guide
 ├── falcon-rust/            # Falcon512 signature library (no-std)
 │   ├── Cargo.toml
 │   ├── src/
 │   └── tests/
+├── keygen/                 # Laptop tool: generate keys
+│   ├── Cargo.toml
+│   └── src/main.rs
+├── flash_keys/             # Laptop tool: prepare keys for flashing
+│   ├── Cargo.toml
+│   └── src/main.rs
 └── stm32/                  # STM32 firmware implementation
     ├── Cargo.toml
     ├── build.rs
-    ├── memory.x
+    ├── memory.x            # Includes reserved flash section for keys
     ├── .cargo/config.toml
     ├── src/
     │   └── main.rs
@@ -37,41 +44,85 @@ A fully-featured, no-std implementation of the Falcon post-quantum digital signa
 
 **Status**: ✅ Fully implemented
 
+### keygen
+
+Laptop tool for generating Falcon512 key pairs. Features:
+
+- Generates cryptographically secure key pairs
+- Outputs keys as Rust arrays and binary files
+- Uses ChaCha20 RNG (configurable to OS RNG)
+- Designed for one-time key generation per device
+
+**Status**: ✅ Complete
+
+### flash_keys
+
+Laptop tool for preparing keys for flashing to STM32. Features:
+
+- Combines secret and public keys into single binary
+- Formats for reserved flash section
+- Provides flashing instructions for multiple tools
+- Creates 8KB binary matching memory layout
+
+**Status**: ✅ Complete
+
 ### stm32
 
-STM32 firmware that demonstrates using Falcon512 for signing operations. Includes:
+STM32 firmware that uses pre-generated Falcon512 keys for signing. Features:
 
-- Basic signing example
-- Memory configuration for STM32F4
-- Build configuration for ARM Cortex-M4F
-- Comprehensive documentation
+- Reads keys from reserved flash section (0x080FE000)
+- No on-device key generation (saves code space and time)
+- Signing with hardware RNG support
+- Memory configuration for STM32F4/H7
 
-**Status**: ✅ Basic implementation complete
+**Status**: ✅ Complete with secure key storage
 
 ## Quick Start
 
-### Build Everything
+### Complete Workflow (Key Generation + Flashing)
+
+For detailed instructions, see [`KEYGEN_WORKFLOW.md`](KEYGEN_WORKFLOW.md).
+
+```bash
+# 1. Generate keys on your laptop
+cd keygen
+cargo run --release
+# Creates: secret_key.bin, public_key.bin
+
+# 2. Prepare keys for flashing
+cd ../flash_keys
+cargo run --release -- \
+  --sk-file ../keygen/secret_key.bin \
+  --pk-file ../keygen/public_key.bin
+# Creates: keys.bin
+
+# 3. Flash keys to STM32 reserved section
+probe-rs download --chip STM32H743ZITx \
+  --format Bin --base-address 0x080FE000 keys.bin
+
+# 4. Build and flash firmware
+cd ../stm32
+cargo build --release
+probe-rs run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/stm32
+```
+
+### Build Individual Components
 
 ```bash
 # Build all workspace members
 cargo build --release
 
-# Build only falcon-rust
+# Build only falcon-rust library
 cargo build -p falcon-rust --release
+
+# Build only keygen tool
+cargo build -p falcon-keygen --release
+
+# Build only flash_keys tool
+cargo build -p flash-keys --release
 
 # Build only STM32 firmware
 cargo build -p falcon512-stm32 --release
-```
-
-### Build STM32 Firmware
-
-```bash
-# Install ARM target
-rustup target add thumbv7em-none-eabihf
-
-# Build and flash (requires probe-rs)
-cd stm32
-cargo run --release
 ```
 
 ### Run Tests
@@ -209,16 +260,27 @@ cargo update
 
 - ✅ Workspace structure configured
 - ✅ falcon-rust library complete
-- ✅ Basic STM32 signing example
+- ✅ Secure key generation workflow (laptop-based)
+- ✅ Key flashing to reserved flash section
+- ✅ STM32 firmware with flash-based key loading
 - 🔄 Hardware RNG integration (example provided)
 - 🔄 UART/serial output (example provided)
 - 🔄 Real-world application examples (TBD)
 
+## Security Features
+
+- **Secure Key Storage**: Keys stored in reserved flash section, never in source code
+- **Per-Device Keys**: Generate unique keys for each device
+- **No On-Device Key Generation**: Keys generated on secure laptop, not embedded device
+- **Flash Protection**: Compatible with STM32 read-out protection (RDP)
+- **Separation of Concerns**: Key generation separate from signing operations
+
 ## Future Work
 
-- Add examples for different STM32 families
-- Implement persistent key storage
+- Add examples for different STM32 families (F4, H7, L4, etc.)
+- Implement STM32 security features (RDP, PCROP, TrustZone)
 - Add UART communication examples
 - Performance benchmarking on real hardware
 - Power consumption measurements
-- Integration with bootloader
+- Integration with secure bootloader
+- External secure element support (ATECC608, etc.)

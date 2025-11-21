@@ -1,0 +1,9 @@
+[package]
+name = "falcon-keygen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+falcon-rust = { path = "../falcon-rust" }
+rand_chacha = "0.3"
+rand_core = "0.6"
