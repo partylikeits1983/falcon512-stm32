@@ -18,7 +18,15 @@ function App() {
   const connectToDevice = async () => {
     try {
       setStatus('Requesting port...');
-      const selectedPort = await navigator.serial.requestPort();
+      // Filter for STM32 device (VID: 0x0483, PID: 0x5740)
+      const selectedPort = await navigator.serial.requestPort({
+        filters: [
+          {
+            usbVendorId: 0x0483,
+            usbProductId: 0x5740,
+          },
+        ],
+      });
       
       setStatus('Opening port at 115200 baud...');
       await selectedPort.open({ baudRate: 115200 });
@@ -231,12 +239,17 @@ function App() {
               <h3>📋 Instructions</h3>
               <ol>
                 <li>Connect your STM32H750B-DK board via USB (CN13 connector)</li>
-                <li>Click "Connect to STM32" and select the serial port</li>
+                <li>Click "Connect to STM32"
+                  <br/><small>The browser will show only your STM32 device (VID: 0x0483, PID: 0x5740). If nothing appears, make sure the device is plugged in and firmware is running.</small>
+                </li>
                 <li>Enter a message to sign</li>
                 <li>Click "Sign Message"</li>
                 <li>Press button B0 on the STM32 board when prompted</li>
-                <li>Wait for the signature to appear</li>
+                <li>Wait for the signature to appear (usually &lt; 1 second)</li>
               </ol>
+              <p style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
+                <strong>⚠️ Note:</strong> Make sure no other program (like the Rust usb-client) is using the serial port.
+              </p>
             </div>
           </div>
         )}

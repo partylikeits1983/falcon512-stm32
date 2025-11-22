@@ -89,6 +89,21 @@ body {
   margin-bottom: 0.5rem;
 }
 
+.info-card small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.info-card code {
+  background: #dbeafe;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  font-family: 'Courier New', monospace;
+}
+
 /* Status Row */
 .status-row {
   display: flex;

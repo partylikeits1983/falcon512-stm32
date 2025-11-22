@@ -1,73 +1,94 @@
-# React + TypeScript + Vite
+# STM32 Falcon512 Signer - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A simple web interface for signing messages using an STM32 microcontroller with Falcon512 post-quantum signatures.
 
-Currently, two official plugins are available:
+## Quick Start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+# Install dependencies
+npm install
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Start development server
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Then open http://localhost:5173 in Chrome, Edge, or Opera.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Usage
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. **Connect your STM32 device**
+   - Connect the STM32H750B-DK board via USB (CN13 connector)
+   - Make sure the firmware is running
+
+2. **Connect in browser**
+   - Click "Connect to STM32"
+   - The browser will show **only your STM32 device** (VID: 0x0483, PID: 0x5740)
+   - If no device appears, make sure the STM32 is plugged in and firmware is running
+   - You should see "✅ Connected to STM32!" with VID/PID confirmation
+
+3. **Sign a message**
+   - Enter any text message (default: "Hello, STM32!")
+   - Click "Sign Message"
+   - Press button B0 on the STM32 board when prompted
+   - Wait for the signature to appear
+
+## Browser Requirements
+
+**Supported browsers:**
+- Chrome 89+
+- Edge 89+
+- Opera 75+
+
+**Not supported:**
+- Firefox (no Web Serial API)
+- Safari (no Web Serial API)
+
+## Protocol
+
+The frontend uses a simple text-based protocol:
+
+**Send:** `message\n` (message with newline)
+
+**Receive:**
 ```
+SIGNATURE: [hex signature]
+PUBLIC_KEY: [hex public key]
+```
+
+## Troubleshooting
+
+### "Web Serial API Not Supported"
+Use Chrome, Edge, or Opera browser.
+
+### No device appears in the port selector
+
+The frontend is configured to show **only** the STM32 device (VID: 0x0483, PID: 0x5740).
+
+If nothing appears:
+1. Make sure the STM32H750B-DK is connected via USB (CN13 connector)
+2. Verify the firmware is running (check RTT logs or LED indicators)
+3. Close any other programs using the serial port (like the Rust usb-client)
+4. Try unplugging and replugging the USB cable
+5. On Linux, you may need permissions: `sudo usermod -a -G dialout $USER` (then log out/in)
+
+### Connection opens but no response
+1. Make sure the STM32 firmware is running
+2. Check that you're using the correct USB port (CN13 on STM32H750B-DK)
+3. Try disconnecting and reconnecting the USB cable
+4. Press the reset button on the STM32 board
+
+### Timeout waiting for response
+You need to press button B0 on the STM32 board to trigger the signing operation.
+
+## Development
+
+The app is built with:
+- React + TypeScript
+- Vite
+- Web Serial API
+
+Main file: `src/App.tsx` - Contains all the logic in a single component for simplicity.
+
+## License
+
+Part of the falcon512-stm32 repository.
