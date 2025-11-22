@@ -105,18 +105,66 @@ function App() {
       }, 30000);
 
       try {
+        // Read until we get a complete response
+        // The STM32 sends: SIGNED:\n<message>\nSIGNATURE:\n<hex>\nPUBLIC_KEY:\n<hex>\n
+        // We need to wait until we have received all the data
+        let lastChunkTime = Date.now();
+        const READ_TIMEOUT = 500; // 500ms without new data means we're done
+
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
           response += chunk;
+          lastChunkTime = Date.now();
 
-          // Check if we have complete response
-          if (
-            response.includes("PUBLIC_KEY:") &&
-            response.includes("\n", response.indexOf("PUBLIC_KEY:"))
-          ) {
+          // Check if we have the complete response structure
+          // Wait a bit after seeing PUBLIC_KEY to ensure we got all the hex data
+          if (response.includes("PUBLIC_KEY:")) {
+            // Wait for a short period to ensure all data is received
+            await new Promise((resolve) => setTimeout(resolve, 200));
+
+            // Try to read any remaining data
+            const controller = new AbortController();
+            const timeoutId = setTimeout(
+              () => controller.abort(),
+              READ_TIMEOUT,
+            );
+
+            try {
+              while (Date.now() - lastChunkTime < READ_TIMEOUT) {
+                const result = await Promise.race([
+                  reader.read(),
+                  new Promise((_, reject) =>
+                    setTimeout(
+                      () => reject(new Error("timeout")),
+                      READ_TIMEOUT,
+                    ),
+                  ),
+                ]);
+
+                if (result && typeof result === "object" && "value" in result) {
+                  const { value: moreValue, done: moreDone } =
+                    result as ReadableStreamReadResult<Uint8Array>;
+                  if (moreDone) break;
+                  if (moreValue) {
+                    const moreChunk = decoder.decode(moreValue, {
+                      stream: true,
+                    });
+                    response += moreChunk;
+                    lastChunkTime = Date.now();
+                  }
+                } else {
+                  break;
+                }
+              }
+            } catch (e) {
+              // Timeout or error means we're done reading
+            } finally {
+              clearTimeout(timeoutId);
+            }
+
             break;
           }
         }
@@ -126,27 +174,63 @@ function App() {
       }
 
       // Parse response
-      const sigMatch = response.match(
-        /SIGNATURE:\s*([0-9a-fA-F\s\n]+)PUBLIC_KEY:/,
-      );
-      const pkMatch = response.match(/PUBLIC_KEY:\s*([0-9a-fA-F\s\n]+)/);
+      // Extract signature: everything between "SIGNATURE:\n" and "\nPUBLIC_KEY:"
+      const sigStart = response.indexOf("SIGNATURE:");
+      const pkStart = response.indexOf("PUBLIC_KEY:");
 
-      if (sigMatch && pkMatch) {
-        const sig = sigMatch[1].replace(/\s/g, "");
-        const pk = pkMatch[1].replace(/\s/g, "");
-
-        setSignature(sig);
-        setPublicKey(pk);
+      if (sigStart === -1 || pkStart === -1) {
         setStatus(
-          "✅ Signature received!\n📊 Signature: " +
-            sig.length / 2 +
-            " bytes\n📊 Public Key: " +
-            pk.length / 2 +
-            " bytes",
+          "❌ Failed to parse response - missing headers:\n" + response,
         );
-      } else {
-        setStatus("❌ Failed to parse response:\n" + response);
+        return;
       }
+
+      // Extract the hex strings
+      const sigSection = response.substring(
+        sigStart + "SIGNATURE:".length,
+        pkStart,
+      );
+      const pkSection = response.substring(pkStart + "PUBLIC_KEY:".length);
+
+      // Remove all whitespace (spaces, newlines, etc.) to get pure hex
+      const sig = sigSection.replace(/\s/g, "");
+      const pk = pkSection.replace(/\s/g, "");
+
+      // Validate hex strings
+      const hexPattern = /^[0-9a-fA-F]+$/;
+      if (!sig || !pk) {
+        setStatus(
+          "❌ Failed to extract signature or public key from response:\n" +
+            response,
+        );
+        return;
+      }
+
+      if (!hexPattern.test(sig)) {
+        setStatus(
+          "❌ Invalid signature format (not valid hex):\n" +
+            sig.substring(0, 100),
+        );
+        return;
+      }
+
+      if (!hexPattern.test(pk)) {
+        setStatus(
+          "❌ Invalid public key format (not valid hex):\n" +
+            pk.substring(0, 100),
+        );
+        return;
+      }
+
+      setSignature(sig);
+      setPublicKey(pk);
+      setStatus(
+        "✅ Signature received!\n📊 Signature: " +
+          sig.length / 2 +
+          " bytes\n📊 Public Key: " +
+          pk.length / 2 +
+          " bytes",
+      );
     } catch (error) {
       setStatus(
         `❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`,

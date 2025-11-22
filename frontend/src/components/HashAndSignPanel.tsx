@@ -8,8 +8,6 @@ import type { Eip712Message } from "../lib/eip712";
 import {
   hashEip712Message,
   hashEip712MessageBytes,
-  hexToBytes,
-  bytesToHex,
   parseSignature,
   formatSignatureForSolidity,
 } from "../lib/eip712";
