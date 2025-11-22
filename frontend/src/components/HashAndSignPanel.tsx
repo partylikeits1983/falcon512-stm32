@@ -3,8 +3,8 @@
  * Handles hashing messages and signing via STM32
  */
 
-import { useState } from 'react';
-import type { Eip712Message } from '../lib/eip712';
+import { useState } from "react";
+import type { Eip712Message } from "../lib/eip712";
 import {
   hashEip712Message,
   hashEip712MessageBytes,
@@ -12,22 +12,25 @@ import {
   bytesToHex,
   parseSignature,
   formatSignatureForSolidity,
-} from '../lib/eip712';
-import { usbTransport } from '../lib/usbTransport';
+} from "../lib/eip712";
+import { usbTransport } from "../lib/usbTransport";
 
 interface HashAndSignPanelProps {
   message: Eip712Message | null;
   isUsbConnected: boolean;
 }
 
-type SigningStatus = 'idle' | 'hashing' | 'signing' | 'success' | 'error';
+type SigningStatus = "idle" | "hashing" | "signing" | "success" | "error";
 
-export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelProps) {
-  const [status, setStatus] = useState<SigningStatus>('idle');
-  const [hashHex, setHashHex] = useState<string>('');
+export function HashAndSignPanel({
+  message,
+  isUsbConnected,
+}: HashAndSignPanelProps) {
+  const [status, setStatus] = useState<SigningStatus>("idle");
+  const [hashHex, setHashHex] = useState<string>("");
   const [hashBytes, setHashBytes] = useState<Uint8Array | null>(null);
   const [signatureBytes, setSignatureBytes] = useState<Uint8Array | null>(null);
-  const [signatureHex, setSignatureHex] = useState<string>('');
+  const [signatureHex, setSignatureHex] = useState<string>("");
   const [signatureComponents, setSignatureComponents] = useState<{
     r: string;
     s: string;
@@ -35,16 +38,16 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signerAddress, setSignerAddress] = useState<string>(
-    '0x0000000000000000000000000000000000000000'
+    "0x0000000000000000000000000000000000000000",
   );
 
   const handleHashMessage = () => {
     if (!message) {
-      setError('No message to hash');
+      setError("No message to hash");
       return;
     }
 
-    setStatus('hashing');
+    setStatus("hashing");
     setError(null);
 
     try {
@@ -54,26 +57,27 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
 
       setHashHex(hash);
       setHashBytes(bytes);
-      setStatus('idle');
+      setStatus("idle");
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to hash message';
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to hash message";
       setError(errorMessage);
-      setStatus('error');
+      setStatus("error");
     }
   };
 
   const handleSignViaStm32 = async () => {
     if (!hashBytes) {
-      setError('Please hash the message first');
+      setError("Please hash the message first");
       return;
     }
 
     if (!isUsbConnected) {
-      setError('Not connected to STM32 device');
+      setError("Not connected to STM32 device");
       return;
     }
 
-    setStatus('signing');
+    setStatus("signing");
     setError(null);
 
     try {
@@ -87,47 +91,48 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
       setSignatureBytes(signature);
       setSignatureHex(sigHex);
       setSignatureComponents(components);
-      setStatus('success');
+      setStatus("success");
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to sign message';
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to sign message";
       setError(errorMessage);
-      setStatus('error');
+      setStatus("error");
     }
   };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(
       () => alert(`${label} copied to clipboard!`),
-      () => alert('Failed to copy to clipboard')
+      () => alert("Failed to copy to clipboard"),
     );
   };
 
   const getStatusColor = () => {
     switch (status) {
-      case 'success':
-        return '#10b981';
-      case 'signing':
-      case 'hashing':
-        return '#f59e0b';
-      case 'error':
-        return '#ef4444';
+      case "success":
+        return "#10b981";
+      case "signing":
+      case "hashing":
+        return "#f59e0b";
+      case "error":
+        return "#ef4444";
       default:
-        return '#6b7280';
+        return "#6b7280";
     }
   };
 
   const getStatusText = () => {
     switch (status) {
-      case 'hashing':
-        return 'Hashing message...';
-      case 'signing':
-        return 'Waiting for device signature...';
-      case 'success':
-        return 'Signature received!';
-      case 'error':
-        return 'Error occurred';
+      case "hashing":
+        return "Hashing message...";
+      case "signing":
+        return "Waiting for device signature...";
+      case "success":
+        return "Signature received!";
+      case "error":
+        return "Error occurred";
       default:
-        return 'Ready';
+        return "Ready";
     }
   };
 
@@ -163,13 +168,16 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
           <h3 style={styles.sectionTitle}>Step 1: Hash Message</h3>
           <button
             onClick={handleHashMessage}
-            disabled={!message || status === 'hashing' || status === 'signing'}
+            disabled={!message || status === "hashing" || status === "signing"}
             style={{
               ...styles.buttonPrimary,
-              opacity: !message || status === 'hashing' || status === 'signing' ? 0.5 : 1,
+              opacity:
+                !message || status === "hashing" || status === "signing"
+                  ? 0.5
+                  : 1,
             }}
           >
-            {status === 'hashing' ? 'Hashing...' : 'Hash Message (Keccak-256)'}
+            {status === "hashing" ? "Hashing..." : "Hash Message (Keccak-256)"}
           </button>
 
           {hashHex && (
@@ -177,7 +185,7 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
               <div style={styles.resultHeader}>
                 <strong>📝 Message Hash</strong>
                 <button
-                  onClick={() => copyToClipboard(hashHex, 'Hash')}
+                  onClick={() => copyToClipboard(hashHex, "Hash")}
                   style={styles.buttonCopy}
                 >
                   Copy
@@ -198,13 +206,14 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
           <h3 style={styles.sectionTitle}>Step 2: Sign via STM32</h3>
           <button
             onClick={handleSignViaStm32}
-            disabled={!hashBytes || !isUsbConnected || status === 'signing'}
+            disabled={!hashBytes || !isUsbConnected || status === "signing"}
             style={{
               ...styles.buttonPrimary,
-              opacity: !hashBytes || !isUsbConnected || status === 'signing' ? 0.5 : 1,
+              opacity:
+                !hashBytes || !isUsbConnected || status === "signing" ? 0.5 : 1,
             }}
           >
-            {status === 'signing' ? 'Signing...' : 'Sign via STM32'}
+            {status === "signing" ? "Signing..." : "Sign via STM32"}
           </button>
 
           {!isUsbConnected && hashBytes && (
@@ -218,7 +227,7 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
               <div style={styles.resultHeader}>
                 <strong>✅ Signature</strong>
                 <button
-                  onClick={() => copyToClipboard(signatureHex, 'Signature')}
+                  onClick={() => copyToClipboard(signatureHex, "Signature")}
                   style={styles.buttonCopy}
                 >
                   Copy
@@ -228,20 +237,28 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
               <div style={styles.signatureComponents}>
                 <div style={styles.component}>
                   <span style={styles.componentLabel}>r:</span>
-                  <code style={styles.componentValue}>{signatureComponents.r}</code>
+                  <code style={styles.componentValue}>
+                    {signatureComponents.r}
+                  </code>
                 </div>
                 <div style={styles.component}>
                   <span style={styles.componentLabel}>s:</span>
-                  <code style={styles.componentValue}>{signatureComponents.s}</code>
+                  <code style={styles.componentValue}>
+                    {signatureComponents.s}
+                  </code>
                 </div>
                 <div style={styles.component}>
                   <span style={styles.componentLabel}>v:</span>
-                  <code style={styles.componentValue}>{signatureComponents.v}</code>
+                  <code style={styles.componentValue}>
+                    {signatureComponents.v}
+                  </code>
                 </div>
               </div>
 
               <div style={styles.resultContent}>
-                <strong style={styles.resultSubtitle}>Full Signature (Hex):</strong>
+                <strong style={styles.resultSubtitle}>
+                  Full Signature (Hex):
+                </strong>
                 <code style={styles.code}>{signatureHex}</code>
               </div>
 
@@ -261,14 +278,18 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
                 <strong>📦 Ready for Solidity Contract</strong>
               </p>
               <p style={styles.infoDescription}>
-                This signature can be verified on-chain using a Solidity contract with
-                <code style={styles.inlineCode}>ecrecover</code> or similar verification logic.
+                This signature can be verified on-chain using a Solidity
+                contract with
+                <code style={styles.inlineCode}>ecrecover</code> or similar
+                verification logic.
               </p>
             </div>
 
             <div style={styles.payloadBox}>
               <div style={styles.payloadField}>
-                <label style={styles.payloadLabel}>Signer Address (on-chain identity):</label>
+                <label style={styles.payloadLabel}>
+                  Signer Address (on-chain identity):
+                </label>
                 <input
                   type="text"
                   value={signerAddress}
@@ -292,7 +313,7 @@ export function HashAndSignPanel({ message, isUsbConnected }: HashAndSignPanelPr
             <div style={styles.codePreview}>
               <strong style={styles.codeTitle}>Example Solidity Call:</strong>
               <pre style={styles.codeBlock}>
-{`// Pseudo-code for contract interaction
+                {`// Pseudo-code for contract interaction
 const contract = new ethers.Contract(
   contractAddress,
   contractAbi,
@@ -315,246 +336,246 @@ const isValid = await contract.verify(
 
 const styles = {
   container: {
-    padding: '20px',
+    padding: "20px",
   },
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: '8px',
-    padding: '24px',
-    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-    maxWidth: '800px',
+    backgroundColor: "#ffffff",
+    borderRadius: "8px",
+    padding: "24px",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+    maxWidth: "800px",
   },
   title: {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    marginBottom: '20px',
-    color: '#1f2937',
+    fontSize: "24px",
+    fontWeight: "bold",
+    marginBottom: "20px",
+    color: "#1f2937",
   },
   statusContainer: {
-    marginBottom: '20px',
+    marginBottom: "20px",
   },
   statusRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
   },
   statusLabel: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#6b7280',
+    fontSize: "14px",
+    fontWeight: "500",
+    color: "#6b7280",
   },
   statusBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '6px 12px',
-    backgroundColor: '#f3f4f6',
-    borderRadius: '6px',
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "6px 12px",
+    backgroundColor: "#f3f4f6",
+    borderRadius: "6px",
   },
   statusDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
   },
   statusText: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#1f2937',
+    fontSize: "14px",
+    fontWeight: "500",
+    color: "#1f2937",
   },
   errorBox: {
-    backgroundColor: '#fef2f2',
-    border: '1px solid #fecaca',
-    borderRadius: '6px',
-    padding: '16px',
-    marginBottom: '20px',
-    color: '#991b1b',
+    backgroundColor: "#fef2f2",
+    border: "1px solid #fecaca",
+    borderRadius: "6px",
+    padding: "16px",
+    marginBottom: "20px",
+    color: "#991b1b",
   },
   errorText: {
-    margin: '8px 0 0 0',
-    fontSize: '14px',
+    margin: "8px 0 0 0",
+    fontSize: "14px",
   },
   warningBox: {
-    backgroundColor: '#fffbeb',
-    border: '1px solid #fde68a',
-    borderRadius: '6px',
-    padding: '12px',
-    marginTop: '12px',
-    fontSize: '14px',
-    color: '#92400e',
+    backgroundColor: "#fffbeb",
+    border: "1px solid #fde68a",
+    borderRadius: "6px",
+    padding: "12px",
+    marginTop: "12px",
+    fontSize: "14px",
+    color: "#92400e",
   },
   section: {
-    marginBottom: '32px',
-    paddingBottom: '32px',
-    borderBottom: '1px solid #e5e7eb',
+    marginBottom: "32px",
+    paddingBottom: "32px",
+    borderBottom: "1px solid #e5e7eb",
   },
   sectionTitle: {
-    fontSize: '18px',
-    fontWeight: '600',
-    marginBottom: '16px',
-    color: '#374151',
+    fontSize: "18px",
+    fontWeight: "600",
+    marginBottom: "16px",
+    color: "#374151",
   },
   buttonPrimary: {
-    backgroundColor: '#3b82f6',
-    color: 'white',
-    padding: '12px 24px',
-    borderRadius: '6px',
-    border: 'none',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
+    backgroundColor: "#3b82f6",
+    color: "white",
+    padding: "12px 24px",
+    borderRadius: "6px",
+    border: "none",
+    fontSize: "14px",
+    fontWeight: "500",
+    cursor: "pointer",
+    transition: "background-color 0.2s",
   },
   buttonCopy: {
-    backgroundColor: '#6b7280',
-    color: 'white',
-    padding: '4px 12px',
-    borderRadius: '4px',
-    border: 'none',
-    fontSize: '12px',
-    fontWeight: '500',
-    cursor: 'pointer',
+    backgroundColor: "#6b7280",
+    color: "white",
+    padding: "4px 12px",
+    borderRadius: "4px",
+    border: "none",
+    fontSize: "12px",
+    fontWeight: "500",
+    cursor: "pointer",
   },
   resultBox: {
-    marginTop: '16px',
-    backgroundColor: '#f9fafb',
-    border: '1px solid #e5e7eb',
-    borderRadius: '6px',
-    padding: '16px',
+    marginTop: "16px",
+    backgroundColor: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    borderRadius: "6px",
+    padding: "16px",
   },
   resultHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '12px',
-    fontSize: '14px',
-    color: '#374151',
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "12px",
+    fontSize: "14px",
+    color: "#374151",
   },
   resultContent: {
-    marginBottom: '8px',
+    marginBottom: "8px",
   },
   resultSubtitle: {
-    display: 'block',
-    fontSize: '13px',
-    color: '#6b7280',
-    marginBottom: '8px',
+    display: "block",
+    fontSize: "13px",
+    color: "#6b7280",
+    marginBottom: "8px",
   },
   code: {
-    display: 'block',
-    backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '4px',
-    padding: '12px',
-    fontSize: '12px',
-    fontFamily: 'monospace',
-    wordBreak: 'break-all' as const,
-    overflowWrap: 'break-word' as const,
+    display: "block",
+    backgroundColor: "#ffffff",
+    border: "1px solid #e5e7eb",
+    borderRadius: "4px",
+    padding: "12px",
+    fontSize: "12px",
+    fontFamily: "monospace",
+    wordBreak: "break-all" as const,
+    overflowWrap: "break-word" as const,
   },
   resultMeta: {
-    fontSize: '12px',
-    color: '#6b7280',
-    marginTop: '8px',
+    fontSize: "12px",
+    color: "#6b7280",
+    marginTop: "8px",
   },
   signatureComponents: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '8px',
-    marginBottom: '16px',
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "8px",
+    marginBottom: "16px",
   },
   component: {
-    display: 'flex',
-    gap: '8px',
-    alignItems: 'flex-start',
+    display: "flex",
+    gap: "8px",
+    alignItems: "flex-start",
   },
   componentLabel: {
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#374151',
-    minWidth: '20px',
+    fontSize: "13px",
+    fontWeight: "600",
+    color: "#374151",
+    minWidth: "20px",
   },
   componentValue: {
     flex: 1,
-    fontSize: '12px',
-    fontFamily: 'monospace',
-    wordBreak: 'break-all' as const,
+    fontSize: "12px",
+    fontFamily: "monospace",
+    wordBreak: "break-all" as const,
   },
   infoBox: {
-    backgroundColor: '#eff6ff',
-    border: '1px solid #bfdbfe',
-    borderRadius: '6px',
-    padding: '16px',
-    marginBottom: '16px',
+    backgroundColor: "#eff6ff",
+    border: "1px solid #bfdbfe",
+    borderRadius: "6px",
+    padding: "16px",
+    marginBottom: "16px",
   },
   infoText: {
-    margin: '0 0 8px 0',
-    fontSize: '14px',
-    color: '#1e40af',
+    margin: "0 0 8px 0",
+    fontSize: "14px",
+    color: "#1e40af",
   },
   infoDescription: {
     margin: 0,
-    fontSize: '14px',
-    color: '#1e40af',
-    lineHeight: '1.5',
+    fontSize: "14px",
+    color: "#1e40af",
+    lineHeight: "1.5",
   },
   inlineCode: {
-    backgroundColor: '#dbeafe',
-    padding: '2px 6px',
-    borderRadius: '3px',
-    fontSize: '13px',
-    fontFamily: 'monospace',
+    backgroundColor: "#dbeafe",
+    padding: "2px 6px",
+    borderRadius: "3px",
+    fontSize: "13px",
+    fontFamily: "monospace",
   },
   payloadBox: {
-    backgroundColor: '#f9fafb',
-    border: '1px solid #e5e7eb',
-    borderRadius: '6px',
-    padding: '16px',
-    marginBottom: '16px',
+    backgroundColor: "#f9fafb",
+    border: "1px solid #e5e7eb",
+    borderRadius: "6px",
+    padding: "16px",
+    marginBottom: "16px",
   },
   payloadField: {
-    marginBottom: '16px',
+    marginBottom: "16px",
   },
   payloadLabel: {
-    display: 'block',
-    fontSize: '13px',
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: '6px',
+    display: "block",
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "#374151",
+    marginBottom: "6px",
   },
   input: {
-    width: '100%',
-    padding: '8px 12px',
-    borderRadius: '4px',
-    border: '1px solid #d1d5db',
-    fontSize: '13px',
-    fontFamily: 'monospace',
-    boxSizing: 'border-box' as const,
+    width: "100%",
+    padding: "8px 12px",
+    borderRadius: "4px",
+    border: "1px solid #d1d5db",
+    fontSize: "13px",
+    fontFamily: "monospace",
+    boxSizing: "border-box" as const,
   },
   payloadValue: {
-    display: 'block',
-    fontSize: '12px',
-    fontFamily: 'monospace',
-    wordBreak: 'break-all' as const,
-    padding: '8px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '4px',
+    display: "block",
+    fontSize: "12px",
+    fontFamily: "monospace",
+    wordBreak: "break-all" as const,
+    padding: "8px",
+    backgroundColor: "#ffffff",
+    border: "1px solid #e5e7eb",
+    borderRadius: "4px",
   },
   codePreview: {
-    marginTop: '16px',
+    marginTop: "16px",
   },
   codeTitle: {
-    display: 'block',
-    fontSize: '13px',
-    color: '#374151',
-    marginBottom: '8px',
+    display: "block",
+    fontSize: "13px",
+    color: "#374151",
+    marginBottom: "8px",
   },
   codeBlock: {
-    backgroundColor: '#1f2937',
-    color: '#f9fafb',
-    padding: '16px',
-    borderRadius: '6px',
-    fontSize: '13px',
-    fontFamily: 'monospace',
-    overflow: 'auto',
-    lineHeight: '1.5',
+    backgroundColor: "#1f2937",
+    color: "#f9fafb",
+    padding: "16px",
+    borderRadius: "6px",
+    fontSize: "13px",
+    fontFamily: "monospace",
+    overflow: "auto",
+    lineHeight: "1.5",
   },
 } as const;

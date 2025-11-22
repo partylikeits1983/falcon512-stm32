@@ -3,16 +3,16 @@
  * Provides helpers for creating and hashing EIP-712 messages
  */
 
-import { TypedDataEncoder, keccak256, toUtf8Bytes } from 'ethers';
+import { TypedDataEncoder, keccak256, toUtf8Bytes } from "ethers";
 
 /**
  * EIP-712 Domain definition
  */
 export const domain = {
-  name: 'STM32SignerDemo',
-  version: '1',
+  name: "STM32SignerDemo",
+  version: "1",
   chainId: 1,
-  verifyingContract: '0x0000000000000000000000000000000000000000',
+  verifyingContract: "0x0000000000000000000000000000000000000000",
 } as const;
 
 /**
@@ -20,10 +20,10 @@ export const domain = {
  */
 export const types = {
   Message: [
-    { name: 'from', type: 'address' },
-    { name: 'to', type: 'address' },
-    { name: 'value', type: 'uint256' },
-    { name: 'nonce', type: 'uint256' },
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "nonce", type: "uint256" },
   ],
 };
 
@@ -59,7 +59,10 @@ export function isValidUint256(value: string): boolean {
 /**
  * Validate EIP-712 message
  */
-export function validateMessage(message: Eip712Message): { valid: boolean; errors: string[] } {
+export function validateMessage(message: Eip712Message): {
+  valid: boolean;
+  errors: string[];
+} {
   const errors: string[] = [];
 
   if (!isValidAddress(message.from)) {
@@ -92,7 +95,7 @@ export function validateMessage(message: Eip712Message): { valid: boolean; error
 export function hashEip712Message(message: Eip712Message): string {
   const validation = validateMessage(message);
   if (!validation.valid) {
-    throw new Error(`Invalid message: ${validation.errors.join(', ')}`);
+    throw new Error(`Invalid message: ${validation.errors.join(", ")}`);
   }
 
   return TypedDataEncoder.hash(domain, types, message);
@@ -105,10 +108,10 @@ export function hashEip712Message(message: Eip712Message): string {
  */
 export function hexToBytes(hex: string): Uint8Array {
   // Remove 0x prefix if present
-  const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
-  
+  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
+
   if (cleanHex.length % 2 !== 0) {
-    throw new Error('Hex string must have even length');
+    throw new Error("Hex string must have even length");
   }
 
   const bytes = new Uint8Array(cleanHex.length / 2);
@@ -127,9 +130,9 @@ export function hexToBytes(hex: string): Uint8Array {
  */
 export function bytesToHex(bytes: Uint8Array, prefix = true): string {
   const hex = Array.from(bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-  
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
   return prefix ? `0x${hex}` : hex;
 }
 
@@ -148,10 +151,10 @@ export function hashEip712MessageBytes(message: Eip712Message): Uint8Array {
  */
 export function createSampleMessage(): Eip712Message {
   return {
-    from: '0x0000000000000000000000000000000000000001',
-    to: '0x0000000000000000000000000000000000000002',
-    value: '1000000000000000000', // 1 ETH in wei
-    nonce: '0',
+    from: "0x0000000000000000000000000000000000000001",
+    to: "0x0000000000000000000000000000000000000002",
+    value: "1000000000000000000", // 1 ETH in wei
+    nonce: "0",
   };
 }
 
@@ -167,14 +170,18 @@ export function formatMessage(message: Eip712Message): string {
  * @param signature 64 or 65 byte signature
  * @returns Object with r, s, v as hex strings
  */
-export function parseSignature(signature: Uint8Array): { r: string; s: string; v: number } {
+export function parseSignature(signature: Uint8Array): {
+  r: string;
+  s: string;
+  v: number;
+} {
   if (signature.length !== 64 && signature.length !== 65) {
     throw new Error(`Invalid signature length: ${signature.length} bytes`);
   }
 
   const r = bytesToHex(signature.slice(0, 32));
   const s = bytesToHex(signature.slice(32, 64));
-  
+
   // If 65 bytes, last byte is v
   // If 64 bytes, v needs to be derived (typically 27 or 28)
   const v = signature.length === 65 ? signature[64] : 27;
@@ -195,7 +202,7 @@ export function formatSignatureForSolidity(signature: Uint8Array): string {
     fullSig[64] = 27;
     return bytesToHex(fullSig);
   }
-  
+
   return bytesToHex(signature);
 }
 
@@ -205,7 +212,7 @@ export function formatSignatureForSolidity(signature: Uint8Array): string {
  * @returns 32-byte hash as hex string
  */
 export function keccak256Hash(data: string | Uint8Array): string {
-  if (typeof data === 'string') {
+  if (typeof data === "string") {
     return keccak256(toUtf8Bytes(data));
   }
   return keccak256(data);

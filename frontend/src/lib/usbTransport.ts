@@ -13,18 +13,18 @@ export interface UsbTransportConfig {
   baudRate?: number;
   dataBits?: 7 | 8;
   stopBits?: 1 | 2;
-  parity?: 'none' | 'even' | 'odd';
+  parity?: "none" | "even" | "odd";
   bufferSize?: number;
-  flowControl?: 'none' | 'hardware';
+  flowControl?: "none" | "hardware";
 }
 
 const DEFAULT_CONFIG: Required<UsbTransportConfig> = {
   baudRate: 115200,
   dataBits: 8,
   stopBits: 1,
-  parity: 'none',
+  parity: "none",
   bufferSize: 255,
-  flowControl: 'none',
+  flowControl: "none",
 };
 
 export class UsbTransport {
@@ -44,7 +44,7 @@ export class UsbTransport {
    * Check if Web Serial API is available
    */
   static isSupported(): boolean {
-    return 'serial' in navigator;
+    return "serial" in navigator;
   }
 
   /**
@@ -52,7 +52,9 @@ export class UsbTransport {
    */
   async connect(): Promise<void> {
     if (!UsbTransport.isSupported()) {
-      throw new Error('Web Serial API is not supported in this browser. Please use Chrome, Edge, or Opera.');
+      throw new Error(
+        "Web Serial API is not supported in this browser. Please use Chrome, Edge, or Opera.",
+      );
     }
 
     try {
@@ -80,7 +82,9 @@ export class UsbTransport {
       // Start reading loop
       this.startReadLoop();
     } catch (error) {
-      throw new Error(`Failed to connect: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to connect: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -95,7 +99,7 @@ export class UsbTransport {
         await this.reader.cancel();
         this.reader.releaseLock();
       } catch (e) {
-        console.warn('Error releasing reader:', e);
+        console.warn("Error releasing reader:", e);
       }
       this.reader = null;
     }
@@ -104,7 +108,7 @@ export class UsbTransport {
       try {
         await this.writer.close();
       } catch (e) {
-        console.warn('Error closing writer:', e);
+        console.warn("Error closing writer:", e);
       }
       this.writer = null;
     }
@@ -113,7 +117,7 @@ export class UsbTransport {
       try {
         await this.port.close();
       } catch (e) {
-        console.warn('Error closing port:', e);
+        console.warn("Error closing port:", e);
       }
       this.port = null;
     }
@@ -134,13 +138,15 @@ export class UsbTransport {
    */
   private async send(data: Uint8Array): Promise<void> {
     if (!this.writer) {
-      throw new Error('Not connected');
+      throw new Error("Not connected");
     }
 
     try {
       await this.writer.write(data);
     } catch (error) {
-      throw new Error(`Failed to send data: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to send data: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -151,16 +157,16 @@ export class UsbTransport {
   private encodePacket(cmd: number, payload: Uint8Array): Uint8Array {
     const len = payload.length;
     const packet = new Uint8Array(5 + len);
-    
+
     packet[0] = START_BYTE;
     packet[1] = cmd;
     packet[2] = (len >> 8) & 0xff; // Length high byte
-    packet[3] = len & 0xff;        // Length low byte
+    packet[3] = len & 0xff; // Length low byte
     packet.set(payload, 4);
-    
+
     // Simple CRC8 checksum
     packet[4 + len] = this.calculateCrc8(packet.slice(0, 4 + len));
-    
+
     return packet;
   }
 
@@ -195,7 +201,7 @@ export class UsbTransport {
     try {
       while (this.isReading && this.reader) {
         const { value, done } = await this.reader.read();
-        
+
         if (done) {
           break;
         }
@@ -206,13 +212,13 @@ export class UsbTransport {
       }
     } catch (error) {
       if (this.isReading) {
-        console.error('Read loop error:', error);
+        console.error("Read loop error:", error);
         // Notify handlers of error
-        this.messageHandlers.forEach(handler => {
+        this.messageHandlers.forEach((handler) => {
           try {
             handler(new Uint8Array([CMD_ERROR]));
           } catch (e) {
-            console.error('Handler error:', e);
+            console.error("Handler error:", e);
           }
         });
       }
@@ -235,7 +241,7 @@ export class UsbTransport {
     while (this.readBuffer.length >= 5) {
       // Look for start byte
       const startIdx = this.readBuffer.indexOf(START_BYTE);
-      
+
       if (startIdx === -1) {
         // No start byte found, clear buffer
         this.readBuffer = new Uint8Array(0);
@@ -271,7 +277,7 @@ export class UsbTransport {
       const calculatedCrc = this.calculateCrc8(packet.slice(0, totalLen - 1));
 
       if (receivedCrc !== calculatedCrc) {
-        console.warn('CRC mismatch, dropping packet');
+        console.warn("CRC mismatch, dropping packet");
         continue;
       }
 
@@ -304,11 +310,11 @@ export class UsbTransport {
     message[0] = cmd;
     message.set(payload, 1);
 
-    this.messageHandlers.forEach(handler => {
+    this.messageHandlers.forEach((handler) => {
       try {
         handler(message);
       } catch (error) {
-        console.error('Handler error:', error);
+        console.error("Handler error:", error);
       }
     });
   }
@@ -320,17 +326,17 @@ export class UsbTransport {
    */
   async signHash(hash: Uint8Array): Promise<Uint8Array> {
     if (hash.length !== 32) {
-      throw new Error('Hash must be exactly 32 bytes');
+      throw new Error("Hash must be exactly 32 bytes");
     }
 
     if (!this.isConnected()) {
-      throw new Error('Not connected to device');
+      throw new Error("Not connected to device");
     }
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         cleanup();
-        reject(new Error('Signature request timed out'));
+        reject(new Error("Signature request timed out"));
       }, 30000); // 30 second timeout
 
       const cleanup = this.onMessage((msg) => {
@@ -340,16 +346,18 @@ export class UsbTransport {
         if (cmd === CMD_SIGNATURE) {
           clearTimeout(timeout);
           cleanup();
-          
+
           if (payload.length === 65 || payload.length === 64) {
             resolve(payload);
           } else {
-            reject(new Error(`Invalid signature length: ${payload.length} bytes`));
+            reject(
+              new Error(`Invalid signature length: ${payload.length} bytes`),
+            );
           }
         } else if (cmd === CMD_ERROR) {
           clearTimeout(timeout);
           cleanup();
-          
+
           const errorCode = payload.length > 0 ? payload[0] : 0;
           reject(new Error(`Device error: code ${errorCode}`));
         }
@@ -357,7 +365,7 @@ export class UsbTransport {
 
       // Send sign request
       const packet = this.encodePacket(CMD_SIGN_HASH, hash);
-      this.send(packet).catch(error => {
+      this.send(packet).catch((error) => {
         clearTimeout(timeout);
         cleanup();
         reject(error);
