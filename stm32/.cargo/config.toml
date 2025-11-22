@@ -11,11 +11,10 @@ target = "thumbv7em-none-eabihf"
 # Use LLD linker for faster builds
 rustflags = [
   "-C", "link-arg=-Tlink.x",
-  "-C", "link-arg=-Tmemory.x",
 ]
 
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "probe-rs run --chip STM32F407VGTx"
+runner = "probe-rs run --chip STM32H743ZITx"
 # Alternative runners:
 # runner = "arm-none-eabi-gdb -q -x openocd.gdb"
-# runner = "pyocd gdb --target stm32f407vg"
+# runner = "pyocd gdb --target stm32h743zi"

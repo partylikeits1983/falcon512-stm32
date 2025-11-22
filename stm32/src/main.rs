@@ -6,7 +6,7 @@ use panic_halt as _;
 use cortex_m_rt::entry;
 use falcon_rust::falcon512;
 use rand_chacha::ChaCha20Rng;
-use rand_core::{RngCore, SeedableRng};
+use rand_core::SeedableRng;
 
 // Set up the global allocator for heap allocations
 use embedded_alloc::Heap;
@@ -16,12 +16,12 @@ static HEAP: Heap = Heap::empty();
 
 // ====== KEY STORAGE IN FLASH ======
 // Keys are stored in a reserved flash section (see memory.x)
-// Flash address: 0x080FE000 (last 8KB of 1MB flash)
+// Flash address: 0x081FE000 (last 8KB of 2MB flash for STM32H743ZI)
 // Layout:
 //   - Bytes 0-1280: Secret key (1281 bytes)
 //   - Bytes 1281-2177: Public key (897 bytes)
 //   - Remaining: unused/padding
-const KEYS_FLASH_ADDR: usize = 0x080FE000;
+const KEYS_FLASH_ADDR: usize = 0x081FE000;
 const SK_SIZE: usize = 1281;
 const PK_SIZE: usize = 897;
 
@@ -49,7 +49,10 @@ fn main() -> ! {
         use core::mem::MaybeUninit;
         const HEAP_SIZE: usize = 64 * 1024;
         static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-        unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
+        unsafe {
+            let heap_ptr = core::ptr::addr_of_mut!(HEAP_MEM);
+            HEAP.init((*heap_ptr).as_mut_ptr() as usize, HEAP_SIZE)
+        }
     }
 
     // Initialize RNG for signing randomness ONLY
@@ -61,12 +64,10 @@ fn main() -> ! {
     // Load pre-generated keys from flash memory
     // SAFETY: Reading from flash memory at a fixed address
     // The keys must be flashed to this address using the flash_keys tool
-    let sk_bytes: &[u8] = unsafe {
-        core::slice::from_raw_parts(KEYS_FLASH_ADDR as *const u8, SK_SIZE)
-    };
-    let pk_bytes: &[u8] = unsafe {
-        core::slice::from_raw_parts((KEYS_FLASH_ADDR + SK_SIZE) as *const u8, PK_SIZE)
-    };
+    let sk_bytes: &[u8] =
+        unsafe { core::slice::from_raw_parts(KEYS_FLASH_ADDR as *const u8, SK_SIZE) };
+    let pk_bytes: &[u8] =
+        unsafe { core::slice::from_raw_parts((KEYS_FLASH_ADDR + SK_SIZE) as *const u8, PK_SIZE) };
 
     // Reconstruct keys from bytes
     // Note: If keys haven't been flashed yet (all zeros), this will fail

@@ -98,7 +98,7 @@ cargo run --release -- \
 
 # 3. Flash keys to STM32 reserved section
 probe-rs download --chip STM32H743ZITx \
-  --format Bin --base-address 0x080FE000 keys.bin
+  --binary-format Bin --base-address 0x080FE000 keys.bin
 
 # 4. Build and flash firmware
 cd ../stm32

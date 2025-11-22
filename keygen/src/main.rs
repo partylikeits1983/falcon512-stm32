@@ -13,11 +13,10 @@ use falcon_rust::falcon512;
 use rand_chacha::ChaCha20Rng;
 use rand_core::{RngCore, SeedableRng};
 use std::fs;
-use std::io::Write;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Falcon512 Key Generation Tool ===\n");
-    
+
     // IMPORTANT: In production, use OS RNG or hardware RNG, not a fixed seed!
     // For example: use rand::rngs::OsRng;
     // For now, using ChaCha20Rng with a fixed seed for reproducibility
@@ -25,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = ChaCha20Rng::from_seed(seed);
 
     println!("Generating Falcon512 key pair...");
-    
+
     // Generate a seed for key generation
     let mut keygen_seed = [0u8; 32];
     rng.fill_bytes(&mut keygen_seed);
@@ -44,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Print secret key as a Rust array
     println!("// Copy this into your STM32 firmware:");
     println!("// File: stm32/src/main.rs\n");
-    
+
     print!("const SK_BYTES: [u8; {}] = [", sk_bytes.len());
     for (i, b) in sk_bytes.iter().enumerate() {
         if i % 16 == 0 {
@@ -74,10 +73,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Also save as binary files for easy flashing
     println!("\n=== Saving Binary Files ===");
-    
+
     fs::write("secret_key.bin", &sk_bytes)?;
     println!("✓ Saved secret_key.bin ({} bytes)", sk_bytes.len());
-    
+
     fs::write("public_key.bin", &pk_bytes)?;
     println!("✓ Saved public_key.bin ({} bytes)", pk_bytes.len());
 

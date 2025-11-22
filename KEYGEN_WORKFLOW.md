@@ -70,7 +70,7 @@ Choose one of these methods:
 ```bash
 probe-rs download \
   --chip STM32H743ZITx \
-  --format Bin \
+  --binary-format Bin \
   --base-address 0x080FE000 \
   keys.bin
 ```

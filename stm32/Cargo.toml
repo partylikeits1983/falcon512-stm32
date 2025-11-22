@@ -9,7 +9,7 @@ authors = ["Your Name <your.email@example.com>"]
 falcon-rust = { path = "../falcon-rust", default-features = false }
 
 # Embedded runtime
-cortex-m = "0.7"
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7"
 
 # Memory allocator for embedded systems

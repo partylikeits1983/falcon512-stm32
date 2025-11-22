@@ -1,19 +1,20 @@
-/* Memory layout for STM32F407 (adjust for your specific chip) */
-/* STM32F407VG has 1MB Flash and 192KB RAM (128KB + 64KB CCM) */
+/* Memory layout for STM32H743ZI */
+/* STM32H743ZI has 2MB Flash and 1MB RAM */
 
 MEMORY
 {
   /* Flash memory - where your program code lives */
-  /* Reserve last 8KB for cryptographic keys (1024K - 8K = 1016K) */
-  FLASH : ORIGIN = 0x08000000, LENGTH = 1016K
+  /* Reserve last 8KB for cryptographic keys (2048K - 8K = 2040K) */
+  FLASH : ORIGIN = 0x08000000, LENGTH = 2040K
   
   /* Reserved flash section for Falcon512 keys */
-  /* Located at end of flash: 0x08000000 + 1016K = 0x080FE000 */
+  /* Located at end of flash: 0x08000000 + 2040K = 0x081FE000 */
   /* Size: 8KB (more than enough for SK=1281 bytes + PK=897 bytes = 2178 bytes) */
-  KEYS : ORIGIN = 0x080FE000, LENGTH = 8K
+  KEYS : ORIGIN = 0x081FE000, LENGTH = 8K
   
   /* RAM - where your program's data and stack live */
   /* Note: Falcon512 requires significant stack space! */
+  /* STM32H7 has multiple RAM regions, using DTCM RAM here */
   RAM : ORIGIN = 0x20000000, LENGTH = 128K
 }
 

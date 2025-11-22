@@ -13,12 +13,17 @@ This crate provides a basic implementation of Falcon512 signing for STM32 microc
 
 ## Hardware Requirements
 
-This firmware is configured for STM32F4 series microcontrollers (specifically STM32F407), but can be adapted for other STM32 families.
+This firmware is configured for STM32H7 series microcontrollers (specifically STM32H743ZI), but can be adapted for other STM32 families.
 
 **Memory Requirements:**
-- **Flash**: ~200-500 KB (depending on optimization)
+- **Flash**: ~200-500 KB (depending on optimization) + 8KB reserved for keys
 - **RAM**: Minimum 64 KB, 128 KB+ recommended
 - **Stack**: 32 KB+ (Falcon operations are stack-intensive)
+
+**Current Configuration:**
+- **Chip**: STM32H743ZITx
+- **Flash**: 2MB (2040KB for code, 8KB reserved for keys at 0x081FE000)
+- **RAM**: 1MB (using 128KB DTCM RAM)
 
 ## Configuration
 
@@ -128,7 +133,7 @@ Ensure your STM32 has sufficient RAM and configure an adequate stack size in `me
 ### Using probe-rs
 
 ```bash
-probe-rs run --chip STM32F407VGTx target/thumbv7em-none-eabihf/release/falcon512-stm32
+probe-rs run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/falcon512-stm32
 ```
 
 ### Using GDB with OpenOCD

@@ -3,6 +3,7 @@ members = [
     "falcon-rust",
     "stm32",
     "keygen",
+    "flash_keys",
 ]
 resolver = "2"
 

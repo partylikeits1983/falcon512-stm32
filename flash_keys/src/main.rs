@@ -80,12 +80,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n✓ Success! Created {}", args.output.display());
     println!("\nFlash this file to your STM32 using:");
     println!("  probe-rs download --chip STM32H743ZITx \\");
-    println!("    --format Bin \\");
+    println!("    --binary-format Bin \\");
     println!("    --base-address 0x080FE000 \\");
     println!("    {}", args.output.display());
     println!("\nOr use OpenOCD:");
     println!("  openocd -f interface/stlink.cfg -f target/stm32h7x.cfg \\");
-    println!("    -c \"program {} 0x080FE000 verify reset exit\"", args.output.display());
+    println!(
+        "    -c \"program {} 0x080FE000 verify reset exit\"",
+        args.output.display()
+    );
 
     Ok(())
 }
