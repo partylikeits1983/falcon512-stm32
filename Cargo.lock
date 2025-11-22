@@ -1162,6 +1162,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "falcon-rust 0.1.2",
  "serialport",
 ]
 

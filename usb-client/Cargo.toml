@@ -7,3 +7,4 @@ edition = "2021"
 serialport = "4.3"
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+falcon-rust = { path = "../falcon-rust" }

@@ -25,7 +25,7 @@ static HEAP: Heap = Heap::empty();
 
 // Import keys from separate module
 mod keys;
-use keys::SK_BYTES;
+use keys::{PK_BYTES, SK_BYTES};
 
 // Maximum message size (adjust as needed)
 const MAX_MESSAGE_SIZE: usize = 512;
@@ -306,7 +306,7 @@ fn main() -> ! {
 
                 rprintln!("Signature generated! Sending response...");
 
-                // Prepare response: original message + signature
+                // Prepare response: original message + signature + public key
                 let sig_bytes = signature.to_bytes();
                 rprintln!("Signature size: {} bytes", sig_bytes.len());
 
@@ -320,6 +320,13 @@ fn main() -> ! {
 
                 // Send signature (hex encoded for readability)
                 for byte in sig_bytes.iter() {
+                    let hex = format_hex(*byte);
+                    let _ = serial.write(&hex);
+                }
+                let _ = serial.write(b"\nPUBLIC_KEY:\n");
+
+                // Send public key (hex encoded for readability)
+                for byte in PK_BYTES.iter() {
                     let hex = format_hex(*byte);
                     let _ = serial.write(&hex);
                 }

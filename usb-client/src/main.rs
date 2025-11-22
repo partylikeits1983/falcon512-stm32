@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use falcon_rust::falcon512;
 use serialport::SerialPort;
 use std::io::{Read, Write};
 use std::time::Duration;
@@ -68,14 +69,69 @@ fn main() -> Result<()> {
     println!("\n📥 Received response from STM32:");
     println!("{}", response);
 
-    // Parse and display signature
-    if let Some(sig_start) = response.find("SIGNATURE:") {
-        let signature = &response[sig_start + 10..].trim();
-        println!("\n🔐 Signature (hex):");
-        println!("{}", signature);
-        println!("\n✅ Message successfully signed!");
+    // Parse signature and public key
+    let sig_start = response
+        .find("SIGNATURE:")
+        .context("Missing SIGNATURE in response - response may be incomplete")?;
+    let pk_start = response
+        .find("PUBLIC_KEY:")
+        .context("Missing PUBLIC_KEY in response - response may be incomplete")?;
+
+    let signature_hex = response[sig_start + 10..pk_start].trim();
+    let public_key_hex = response[pk_start + 11..].trim();
+
+    println!("\n🔐 Signature (hex):");
+    println!("{}", signature_hex);
+
+    println!("\n🔑 Public Key (hex):");
+    println!("{}", public_key_hex);
+
+    // Decode hex signature
+    let sig_bytes = hex_decode(signature_hex).with_context(|| {
+        format!(
+            "Failed to decode signature hex (length: {})",
+            signature_hex.len()
+        )
+    })?;
+    let pk_bytes = hex_decode(public_key_hex).with_context(|| {
+        format!(
+            "Failed to decode public key hex (length: {})",
+            public_key_hex.len()
+        )
+    })?;
+
+    println!(
+        "\n📊 Decoded {} signature bytes and {} public key bytes",
+        sig_bytes.len(),
+        pk_bytes.len()
+    );
+
+    // Parse signature and public key
+    let signature = falcon512::Signature::from_bytes(&sig_bytes).map_err(|_| {
+        anyhow::anyhow!(
+            "Failed to parse signature - expected {} bytes, got {}",
+            666,
+            sig_bytes.len()
+        )
+    })?;
+    let public_key = falcon512::PublicKey::from_bytes(&pk_bytes).map_err(|_| {
+        anyhow::anyhow!(
+            "Failed to parse public key - expected {} bytes, got {}",
+            897,
+            pk_bytes.len()
+        )
+    })?;
+
+    // Verify signature
+    println!("\n🔍 Verifying signature...");
+    let is_valid = falcon512::verify(args.message.as_bytes(), &signature, &public_key);
+
+    if is_valid {
+        println!("✅ Signature verification PASSED!");
+        println!("✅ Message successfully signed and verified!");
     } else {
-        println!("⚠️  Warning: Could not parse signature from response");
+        println!("❌ Signature verification FAILED!");
+        anyhow::bail!("Signature verification failed");
     }
 
     Ok(())
@@ -173,8 +229,8 @@ fn read_response(port: &mut Box<dyn SerialPort>, timeout_secs: u64) -> Result<St
                 let chunk = String::from_utf8_lossy(&buffer[..n]);
                 response.push_str(&chunk);
 
-                // Check if we have a complete response (ends with newline after signature)
-                if response.contains("SIGNATURE:") && response.ends_with('\n') {
+                // Check if we have a complete response (ends with newline after public key)
+                if response.contains("PUBLIC_KEY:") && response.ends_with('\n') {
                     break;
                 }
             }
@@ -193,4 +249,22 @@ fn read_response(port: &mut Box<dyn SerialPort>, timeout_secs: u64) -> Result<St
     }
 
     Ok(response)
+}
+
+fn hex_decode(hex_str: &str) -> Result<Vec<u8>> {
+    let hex_str = hex_str.replace('\n', "").replace('\r', "").replace(' ', "");
+
+    if hex_str.len() % 2 != 0 {
+        anyhow::bail!("Hex string has odd length");
+    }
+
+    let mut bytes = Vec::with_capacity(hex_str.len() / 2);
+    for i in (0..hex_str.len()).step_by(2) {
+        let byte_str = &hex_str[i..i + 2];
+        let byte = u8::from_str_radix(byte_str, 16)
+            .with_context(|| format!("Invalid hex byte: {}", byte_str))?;
+        bytes.push(byte);
+    }
+
+    Ok(bytes)
 }
