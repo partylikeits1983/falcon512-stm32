@@ -11,7 +11,6 @@ use rand_core::SeedableRng;
 use stm32h7xx_hal::{pac, prelude::*, rcc::rec::UsbClkSel};
 
 // USB imports
-use heapless::Vec as HVec;
 use stm32h7xx_hal::usb_hs::{UsbBus, USB2};
 use usb_device::device::UsbDeviceBuilder;
 use usb_device::prelude::*;
@@ -27,8 +26,12 @@ static HEAP: Heap = Heap::empty();
 mod keys;
 use keys::{PK_BYTES, SK_BYTES};
 
-// Maximum message size (adjust as needed)
-const MAX_MESSAGE_SIZE: usize = 512;
+// Import signing and USB modules
+mod signing;
+mod usb;
+
+use signing::Signer;
+use usb::UsbMessageHandler;
 
 // Simple delay function
 fn delay_ms(ms: u32) {
@@ -42,7 +45,6 @@ enum SigningState {
     WaitingForMessage,
     MessageReceived,
     Signing,
-    SignatureReady,
 }
 
 /// USB-based Falcon512 signing with button confirmation
@@ -125,9 +127,9 @@ fn main() -> ! {
     // Initialize RNG
     rprintln!("Initializing RNG...");
     let seed = [0x42u8; 32]; // TODO: Use hardware RNG in production
-    let mut rng = ChaCha20Rng::from_seed(seed);
+    let rng = ChaCha20Rng::from_seed(seed);
 
-    // Load keys
+    // Load keys and create signer
     rprintln!("Loading keys...");
     let secret_key = match falcon512::SecretKey::from_bytes(&SK_BYTES) {
         Ok(sk) => {
@@ -141,6 +143,9 @@ fn main() -> ! {
             }
         }
     };
+
+    // Create signer
+    let mut signer = Signer::new(secret_key, rng);
 
     // Setup USB - USB2 OTG FS on PA11/PA12 (CN13 connector on STM32H750B-DK)
     rprintln!("Initializing USB...");
@@ -167,6 +172,7 @@ fn main() -> ! {
     );
 
     rprintln!("Step 4: Creating USB bus");
+    #[allow(static_mut_refs)]
     let usb_bus = UsbBus::new(usb, unsafe { &mut EP_MEMORY });
 
     rprintln!("Step 5: Creating serial port");
@@ -190,11 +196,10 @@ fn main() -> ! {
     rprintln!("\n=== Ready to receive messages via USB ===");
     rprintln!("Send a message to sign it with button confirmation\n");
 
-    // Message buffer
-    let mut message_buffer: HVec<u8, MAX_MESSAGE_SIZE> = HVec::new();
+    // Create USB message handler
+    let mut usb_handler = UsbMessageHandler::new();
     let mut state = SigningState::WaitingForMessage;
     let mut blink_counter = 0u32;
-
     let mut led_counter = 0u32;
 
     loop {
@@ -204,40 +209,10 @@ fn main() -> ! {
         match state {
             SigningState::WaitingForMessage => {
                 // Try to read from USB
-                let mut buf = [0u8; 64];
-                match serial.read(&mut buf) {
-                    Ok(count) if count > 0 => {
-                        rprintln!("Received {} bytes via USB", count);
-
-                        // Append to message buffer
-                        for i in 0..count {
-                            if message_buffer.push(buf[i]).is_err() {
-                                rprintln!("ERROR: Message too large!");
-                                message_buffer.clear();
-                                break;
-                            }
-                        }
-
-                        // Check for newline (message complete)
-                        if buf[..count].contains(&b'\n') || buf[..count].contains(&b'\r') {
-                            // Remove trailing newline/carriage return
-                            while message_buffer.last() == Some(&b'\n')
-                                || message_buffer.last() == Some(&b'\r')
-                            {
-                                message_buffer.pop();
-                            }
-
-                            if !message_buffer.is_empty() {
-                                rprintln!("Message complete: {} bytes", message_buffer.len());
-                                rprintln!("Waiting for button press to sign...");
-                                state = SigningState::MessageReceived;
-                                blink_counter = 0;
-                            } else {
-                                message_buffer.clear();
-                            }
-                        }
-                    }
-                    _ => {}
+                if let Some(_message) = usb_handler.try_read_message(&mut serial) {
+                    rprintln!("Waiting for button press to sign...");
+                    state = SigningState::MessageReceived;
+                    blink_counter = 0;
                 }
 
                 // Slow blink when waiting (non-blocking)
@@ -300,42 +275,17 @@ fn main() -> ! {
             }
 
             SigningState::Signing => {
+                // Get the message from the handler's buffer
+                let message = usb_handler.get_message();
+
                 // Sign the message (LED is already on)
-                rprintln!("Signing {} byte message...", message_buffer.len());
-                let signature = falcon512::sign_with_rng(&message_buffer, &secret_key, &mut rng);
+                let sig_bytes = signer.sign_message(message);
 
-                rprintln!("Signature generated! Sending response...");
-
-                // Prepare response: original message + signature + public key
-                let sig_bytes = signature.to_bytes();
-                rprintln!("Signature size: {} bytes", sig_bytes.len());
-
-                // Send response header
-                let header = b"SIGNED:\n";
-                let _ = serial.write(header);
-
-                // Send original message
-                let _ = serial.write(&message_buffer);
-                let _ = serial.write(b"\nSIGNATURE:\n");
-
-                // Send signature (hex encoded for readability)
-                for byte in sig_bytes.iter() {
-                    let hex = format_hex(*byte);
-                    let _ = serial.write(&hex);
-                }
-                let _ = serial.write(b"\nPUBLIC_KEY:\n");
-
-                // Send public key (hex encoded for readability)
-                for byte in PK_BYTES.iter() {
-                    let hex = format_hex(*byte);
-                    let _ = serial.write(&hex);
-                }
-                let _ = serial.write(b"\n");
-
-                rprintln!("Response sent via USB");
+                // Send response via USB
+                usb_handler.send_signed_response(&mut serial, message, &sig_bytes, &PK_BYTES);
 
                 // Clear buffer and return to waiting
-                message_buffer.clear();
+                usb_handler.clear_buffer();
                 state = SigningState::WaitingForMessage;
 
                 // Success: LED off, then 3 slow blinks
@@ -355,20 +305,6 @@ fn main() -> ! {
 
                 rprintln!("Ready for next message\n");
             }
-
-            SigningState::SignatureReady => {
-                // This state is not used in current implementation
-                state = SigningState::WaitingForMessage;
-            }
         }
     }
-}
-
-// Helper function to format byte as hex
-fn format_hex(byte: u8) -> [u8; 2] {
-    const HEX_CHARS: &[u8] = b"0123456789ABCDEF";
-    [
-        HEX_CHARS[(byte >> 4) as usize],
-        HEX_CHARS[(byte & 0x0F) as usize],
-    ]
 }
