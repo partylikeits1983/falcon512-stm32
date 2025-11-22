@@ -12,7 +12,7 @@ use stm32h7xx_hal::{pac, prelude::*, rcc::rec::UsbClkSel};
 
 // USB imports
 use heapless::Vec as HVec;
-use stm32h7xx_hal::usb_hs::{UsbBus, USB1};
+use stm32h7xx_hal::usb_hs::{UsbBus, USB2};
 use usb_device::device::UsbDeviceBuilder;
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
@@ -89,15 +89,17 @@ fn main() -> ! {
     let gpioe = dp.GPIOE.split(ccdr.peripheral.GPIOE);
     let mut led = gpioe.pe3.into_push_pull_output();
 
-    // Setup button B0 (User button)
-    // Common pins: PC13 on most STM32H7 Nucleo/Discovery boards
-    // If B0 is on a different pin on your board, change pc13 to the correct pin
-    // The button is typically active-low (pressed = low voltage)
+    // Setup buttons for WeAct STM32H7 Core Board
+    // K1 user button on PC13 (active HIGH - pressed = HIGH)
     let gpioc = dp.GPIOC.split(ccdr.peripheral.GPIOC);
-    let button = gpioc.pc13.into_pull_up_input();
+    let button_key = gpioc.pc13.into_pull_down_input();
+
+    // BOOT0 button on PB2 (active HIGH - pressed = HIGH)
+    let gpiob = dp.GPIOB.split(ccdr.peripheral.GPIOB);
+    let button_boot = gpiob.pb2.into_pull_down_input();
 
     rprintln!("LED initialized on PE3");
-    rprintln!("Button B0 (User) initialized on PC13");
+    rprintln!("Buttons initialized: K1(PC13) and BOOT0(PB2) - both active-HIGH");
 
     // Startup blink
     for _ in 0..2 {
@@ -140,7 +142,7 @@ fn main() -> ! {
         }
     };
 
-    // Setup USB - USB1 OTG FS on PA11/PA12 (CN13 connector on STM32H750B-DK)
+    // Setup USB - USB2 OTG FS on PA11/PA12 (CN13 connector on STM32H750B-DK)
     rprintln!("Initializing USB...");
     rprintln!("Step 1: Splitting GPIOA");
     let gpioa = dp.GPIOA.split(ccdr.peripheral.GPIOA);
@@ -149,18 +151,18 @@ fn main() -> ! {
     let usb_dm = gpioa.pa11.into_alternate::<10>();
     let usb_dp = gpioa.pa12.into_alternate::<10>();
 
-    rprintln!("Step 3: Creating USB peripheral (USB1 OTG FS)");
+    rprintln!("Step 3: Creating USB peripheral (USB2 OTG FS)");
     // USB endpoint memory
     static mut EP_MEMORY: [u32; 1024] = [0; 1024];
 
-    // Use USB1 (OTG FS) peripheral - this is connected to CN13 on the board
-    let usb = USB1::new(
-        dp.OTG1_HS_GLOBAL,
-        dp.OTG1_HS_DEVICE,
-        dp.OTG1_HS_PWRCLK,
+    // Use USB2 (OTG_FS on PA11/PA12) - this is connected to CN13 on the board
+    let usb = USB2::new(
+        dp.OTG2_HS_GLOBAL,
+        dp.OTG2_HS_DEVICE,
+        dp.OTG2_HS_PWRCLK,
         usb_dm,
         usb_dp,
-        ccdr.peripheral.USB1OTG,
+        ccdr.peripheral.USB2OTG,
         &ccdr.clocks,
     );
 
@@ -193,11 +195,11 @@ fn main() -> ! {
     let mut state = SigningState::WaitingForMessage;
     let mut blink_counter = 0u32;
 
+    let mut led_counter = 0u32;
+
     loop {
-        // Poll USB
-        if !usb_dev.poll(&mut [&mut serial]) {
-            continue;
-        }
+        // Poll USB frequently - CRITICAL for enumeration and communication
+        usb_dev.poll(&mut [&mut serial]);
 
         match state {
             SigningState::WaitingForMessage => {
@@ -238,38 +240,71 @@ fn main() -> ! {
                     _ => {}
                 }
 
-                // Slow blink when waiting
-                led.set_high();
-                delay_ms(500);
-                led.set_low();
-                delay_ms(500);
+                // Slow blink when waiting (non-blocking)
+                led_counter += 1;
+                if led_counter % 50000 == 0 {
+                    led.toggle();
+                }
             }
 
             SigningState::MessageReceived => {
                 // Flash LED rapidly until button press
-                if blink_counter % 10 == 0 {
+                blink_counter += 1;
+                if blink_counter % 5000 == 0 {
                     led.toggle();
                 }
-                blink_counter += 1;
 
-                // Check button (active low on most Nucleo boards)
-                if button.is_low() {
-                    rprintln!("Button pressed! Signing message...");
-                    state = SigningState::Signing;
-                    led.set_high(); // LED on during signing
-                    delay_ms(200); // Debounce
+                // Debug: Print button states periodically
+                if blink_counter % 100000 == 0 {
+                    rprintln!(
+                        "Button states - K1(PC13): {}, BOOT0(PB2): {}",
+                        if button_key.is_high() {
+                            "PRESSED"
+                        } else {
+                            "not pressed"
+                        },
+                        if button_boot.is_high() {
+                            "PRESSED"
+                        } else {
+                            "not pressed"
+                        }
+                    );
                 }
 
-                delay_ms(50); // Rapid blink delay
+                // Check both buttons (active HIGH - pressed = HIGH)
+                if button_key.is_high() || button_boot.is_high() {
+                    let btn_name = if button_key.is_high() {
+                        "K1(PC13)"
+                    } else {
+                        "BOOT0(PB2)"
+                    };
+                    rprintln!("Button {} pressed! Starting signing...", btn_name);
+
+                    // Confirmation blinks: 3 quick blinks
+                    for _ in 0..3 {
+                        led.set_high();
+                        for _ in 0..10000 {
+                            usb_dev.poll(&mut [&mut serial]);
+                            cortex_m::asm::nop();
+                        }
+                        led.set_low();
+                        for _ in 0..10000 {
+                            usb_dev.poll(&mut [&mut serial]);
+                            cortex_m::asm::nop();
+                        }
+                    }
+
+                    state = SigningState::Signing;
+                    led.set_high(); // LED stays on during signing
+                }
             }
 
             SigningState::Signing => {
-                // Sign the message
+                // Sign the message (LED is already on)
                 rprintln!("Signing {} byte message...", message_buffer.len());
                 let signature = falcon512::sign_with_rng(&message_buffer, &secret_key, &mut rng);
-                led.set_low();
 
-                rprintln!("Signature generated!");
+                rprintln!("Signature generated! Sending response...");
 
                 // Prepare response: original message + signature
                 let sig_bytes = signature.to_bytes();
@@ -296,12 +331,19 @@ fn main() -> ! {
                 message_buffer.clear();
                 state = SigningState::WaitingForMessage;
 
-                // Success blink
+                // Success: LED off, then 3 slow blinks
+                led.set_low();
                 for _ in 0..3 {
+                    for _ in 0..200000 {
+                        usb_dev.poll(&mut [&mut serial]);
+                        cortex_m::asm::nop();
+                    }
                     led.set_high();
-                    delay_ms(200);
+                    for _ in 0..200000 {
+                        usb_dev.poll(&mut [&mut serial]);
+                        cortex_m::asm::nop();
+                    }
                     led.set_low();
-                    delay_ms(200);
                 }
 
                 rprintln!("Ready for next message\n");

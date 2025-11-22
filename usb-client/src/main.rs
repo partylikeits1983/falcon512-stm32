@@ -115,27 +115,44 @@ fn port_type_name(port_type: &serialport::SerialPortType) -> String {
 fn find_stm32_port() -> Result<String> {
     let ports = serialport::available_ports().context("Failed to list serial ports")?;
 
-    // Look for STM32 VID (0x0483) or common USB-serial adapters
+    // Look for STM32 VID (0x0483) - this matches our firmware's VID/PID
     for port in &ports {
         if let serialport::SerialPortType::UsbPort(info) = &port.port_type {
-            // STM32 VID
+            // STM32 VID (0x0483) - our firmware uses PID 0x5740 for CDC
             if info.vid == 0x0483 {
-                println!("🔍 Auto-detected STM32 device: {}", port.port_name);
+                println!(
+                    "🔍 Auto-detected STM32 device: {} (VID: {:04x}, PID: {:04x})",
+                    port.port_name, info.vid, info.pid
+                );
                 return Ok(port.port_name.clone());
             }
         }
     }
 
-    // If no STM32 found, try to use the first available port
-    if let Some(port) = ports.first() {
-        println!(
-            "⚠️  No STM32 device found, using first available port: {}",
-            port.port_name
-        );
-        return Ok(port.port_name.clone());
+    // If no STM32 found, list available ports and fail
+    println!("⚠️  No STM32 device found (VID: 0x0483)");
+    println!("📋 Available ports:");
+    for port in &ports {
+        if let serialport::SerialPortType::UsbPort(info) = &port.port_type {
+            println!(
+                "  • {} - VID: {:04x}, PID: {:04x}",
+                port.port_name, info.vid, info.pid
+            );
+        } else {
+            println!(
+                "  • {} - {}",
+                port.port_name,
+                port_type_name(&port.port_type)
+            );
+        }
     }
 
-    anyhow::bail!("No serial ports found. Please specify port with --port option");
+    anyhow::bail!(
+        "No STM32 device found. Please:\n\
+                   1. Connect USB cable to CN13 (USB OTG FS) connector on STM32H750B-DK\n\
+                   2. Ensure firmware is running (check RTT logs)\n\
+                   3. Or specify port manually with --port option"
+    );
 }
 
 fn read_response(port: &mut Box<dyn SerialPort>, timeout_secs: u64) -> Result<String> {
