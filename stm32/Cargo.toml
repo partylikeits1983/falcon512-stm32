@@ -15,13 +15,14 @@ cortex-m-rt = "0.7"
 # Memory allocator for embedded systems
 embedded-alloc = "0.5"
 
-# Panic handler
-panic-halt = "0.2"
+# Panic handler and debug output
+panic-rtt-target = { version = "0.1", features = ["cortex-m"] }
+rtt-target = "0.5"
 
 # Random number generation (using ChaCha20 for deterministic testing)
 rand_core = { version = "0.6", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 
-# Optional: STM32 HAL - uncomment and modify for your specific STM32 chip
-# stm32f4xx-hal = { version = "0.21", features = ["stm32f407"] }
+# STM32H7 HAL for GPIO control
+stm32h7xx-hal = { version = "0.16", features = ["stm32h743v", "rt"] }
 

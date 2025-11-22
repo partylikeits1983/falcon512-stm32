@@ -1,0 +1,12 @@
+[default.general]
+chip = "STM32H743ZITx"
+
+[default.reset]
+enabled = true
+halt_afterwards = false
+
+[default.rtt]
+enabled = true
+
+[default.gdb]
+enabled = false

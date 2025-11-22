@@ -14,13 +14,21 @@ MEMORY
   
   /* RAM - where your program's data and stack live */
   /* Note: Falcon512 requires significant stack space! */
-  /* STM32H7 has multiple RAM regions, using DTCM RAM here */
-  RAM : ORIGIN = 0x20000000, LENGTH = 128K
+  /* STM32H7 has multiple RAM regions:
+   * - DTCM RAM: 0x20000000, 128KB (fast, tightly coupled)
+   * - AXI SRAM: 0x24000000, 512KB (main SRAM, good for large allocations)
+   * - SRAM1: 0x30000000, 128KB
+   * - SRAM2: 0x30020000, 128KB
+   * - SRAM3: 0x30040000, 32KB
+   * - SRAM4: 0x38000000, 64KB (backup SRAM)
+   */
+  /* Using AXI SRAM for more space for Falcon512 operations */
+  RAM : ORIGIN = 0x24000000, LENGTH = 512K
 }
 
 /* Stack size - Falcon512 operations need substantial stack */
-/* Adjust based on your testing and available RAM */
-_stack_size = 32K;
+/* With 512KB RAM, we can afford a larger stack */
+_stack_size = 64K;
 
 /* This is where the call stack will be allocated. */
 /* The stack is of the full descending type. */
