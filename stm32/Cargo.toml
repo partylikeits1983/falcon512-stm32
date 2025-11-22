@@ -23,6 +23,13 @@ rtt-target = "0.5"
 rand_core = { version = "0.6", default-features = false }
 rand_chacha = { version = "0.3", default-features = false }
 
-# STM32H7 HAL for GPIO control
-stm32h7xx-hal = { version = "0.16", features = ["stm32h743v", "rt"] }
+# STM32H7 HAL for GPIO control and USB
+stm32h7xx-hal = { version = "0.16", features = ["stm32h743v", "rt", "usb_hs"] }
+
+# USB device support
+usb-device = "0.3"
+usbd-serial = "0.2"
+
+# Heapless for static buffers
+heapless = "0.8"
 
