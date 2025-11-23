@@ -536,3 +536,58 @@ input[type="radio"]:hover {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
+
+/* Footer */
+.footer {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #94a3b8;
+  text-decoration: none;
+  font-weight: 400;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.github-link:hover {
+  color: #f1f5f9;
+  transform: translateY(-1px);
+}
+
+.github-logo {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.3s ease;
+}
+
+.github-link:hover .github-logo {
+  transform: scale(1.1);
+}
+
+.github-text {
+  font-family: inherit;
+}
+
+/* Responsive footer */
+@media (max-width: 480px) {
+  .footer {
+    margin-top: 1.5rem;
+    padding: 1rem;
+  }
+  
+  .github-link {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.85rem;
+  }
+  
+  .github-logo {
+    width: 18px;
+    height: 18px;
+  }
+}
