@@ -2,9 +2,11 @@
 
 ![Post-Quantum Hardware Wallet Tweet](docs/pqhwtweet.png)
 
+**Live Demo**: [https://www.postquantumhardwarewallet.com/](https://www.postquantumhardwarewallet.com/)
+
 A post-quantum hardware wallet implementation using Falcon-512 signatures on STM32 microcontrollers, designed to provide quantum-resistant transaction signing for institutional cryptocurrency custody.
 
-## Overview
+## Abstract 
 
 Institutional capital will not fully commit to blockchains until keys and signatures are provably safe against quantum adversaries. Ethereum's current ECDSA and BLS schemes are dead in a post-quantum world: Shor's algorithm makes the elliptic-curve discrete log problem tractable, so any account that has ever broadcast a signed transaction leaks enough information (signature + message) to reconstruct its public key and, once a large quantum computer exists, recover its private key. Recent roadmaps and expert surveys now treat a cryptographically relevant quantum computer as a medium-term risk in roughly a five-to-ten-year window, with non-trivial probability even near five years for state-level actors. In that world, it is rational for an adversary to spend quantum resources to compromise large Bitcoin and Ethereum accounts while shorting the assets, with plausible damage in the multi-trillion-dollar range. "Harvest-now, exploit-later" collection of signatures is therefore a credible threat to long-lived wallets and institutional treasuries.
 
@@ -29,7 +31,7 @@ The following demonstration shows the complete signing workflow:
 ### Step 1: Initiating Signature Request
 ![Waiting to Sign](docs/waiting-to-sign.gif)
 
-### Step 2: User Confirmation
+### Step 2: Waiting for user button confirmation
 ![Waiting for Button Click](docs/waiting-for-click.gif)
 
 **Complete Workflow:**
@@ -37,7 +39,7 @@ The following demonstration shows the complete signing workflow:
 1. **User initiates signing**: Click "Sign" button in the web UI
    - STM32 enters signing mode with slow blinking LED
    
-2. **User confirmation**: Press the physical button on the STM32
+2. **Waitingfor user confirmation**: Press the physical button on the STM32
    - LED switches to fast blinking, indicating signature generation in progress
    
 3. **Signature generation**: STM32 computes Falcon-512 signature
@@ -60,8 +62,6 @@ A fully-featured, no-std implementation of the Falcon post-quantum digital signa
 - No heap allocations required
 - Optimized for embedded constraints
 
-**Status**: ✅ Fully implemented and optimized for STM32
-
 ### falcon-wasm
 
 WebAssembly bindings for Falcon-512 verification in the browser:
@@ -69,8 +69,6 @@ WebAssembly bindings for Falcon-512 verification in the browser:
 - Compiles the same Falcon implementation to WASM
 - Enables client-side signature verification
 - Consistent cryptographic implementation across embedded and web
-
-**Status**: ✅ Complete
 
 ### frontend
 
@@ -81,8 +79,6 @@ React-based web interface for interacting with the hardware wallet:
 - Real-time signature verification
 - ERC-7730 structured data support
 
-**Status**: ✅ Complete with USB integration
-
 ### keygen
 
 Laptop tool for generating Falcon512 key pairs:
@@ -91,8 +87,6 @@ Laptop tool for generating Falcon512 key pairs:
 - Outputs keys as Rust arrays and binary files
 - Uses ChaCha20 RNG (configurable to OS RNG)
 - Designed for one-time key generation per device
-
-**Status**: ✅ Complete
 
 ### stm32
 
@@ -104,8 +98,6 @@ STM32 firmware that uses pre-generated Falcon512 keys for signing:
 - Secure key storage in flash
 - Hardware RNG support
 
-**Status**: ✅ Complete with USB and user interaction
-
 ### usb-client
 
 Command-line client for communicating with the STM32 device:
@@ -113,8 +105,6 @@ Command-line client for communicating with the STM32 device:
 - Direct USB communication
 - Testing and debugging interface
 - Batch signing operations
-
-**Status**: ✅ Complete
 
 ## Quick Start
 
@@ -212,8 +202,6 @@ MIT License - see individual crate directories for details.
 
 - Hardware security module integration
 - Secure element support (ATECC608, etc.)
-- Multi-signature schemes
-- Integration with major blockchain wallets
-- Formal verification of cryptographic implementation
-- Power analysis resistance
 - Side-channel attack mitigation
+- User defined RNG on STM32
+- On STM32 key generation
