@@ -607,7 +607,7 @@ function App() {
 
             {/* What You're Signing */}
             <div className="card">
-              <h2>What You're Signing</h2>
+              <h2>What You're Signing EIP-7730</h2>
               {!isEditing ? (
                 <div
                   onClick={enterEditMode}

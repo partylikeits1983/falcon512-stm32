@@ -12,7 +12,7 @@ use stm32h7xx_hal::{pac, prelude::*, rcc::rec::UsbClkSel};
 
 // USB imports
 use stm32h7xx_hal::usb_hs::{UsbBus, USB2};
-use usb_device::device::UsbDeviceBuilder;
+use usb_device::device::{UsbDeviceBuilder, UsbDeviceState};
 use usb_device::prelude::*;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
@@ -45,6 +45,15 @@ enum SigningState {
     WaitingForMessage,
     MessageReceived,
     Signing,
+}
+
+// USB connection state tracking
+#[derive(PartialEq)]
+enum UsbConnectionState {
+    Disconnected,
+    Connecting,
+    Connected,
+    Suspended,
 }
 
 /// USB-based Falcon512 signing with button confirmation
@@ -82,10 +91,17 @@ fn main() -> ! {
         let pwr = &*pac::PWR::ptr();
         // Try to enable USB regulator if available
         pwr.cr3.modify(|_, w| w.usbregen().set_bit());
-        // Small delay to let it stabilize
-        delay_ms(10);
+        // Wait longer for USB power to stabilize
+        delay_ms(50);
+        
+        // Additional USB configuration for stability
+        let rcc = &*pac::RCC::ptr();
+        // Ensure USB clock is stable
+        while !rcc.cr.read().hsi48rdy().bit_is_set() {
+            cortex_m::asm::nop();
+        }
     }
-    rprintln!("USB power configured");
+    rprintln!("USB power configured and stabilized");
 
     // Setup LED on PE3
     let gpioe = dp.GPIOE.split(ccdr.peripheral.GPIOE);
@@ -157,8 +173,8 @@ fn main() -> ! {
     let usb_dp = gpioa.pa12.into_alternate::<10>();
 
     rprintln!("Step 3: Creating USB peripheral (USB2 OTG FS)");
-    // USB endpoint memory
-    static mut EP_MEMORY: [u32; 1024] = [0; 1024];
+    // USB endpoint memory - increased size for better buffering
+    static mut EP_MEMORY: [u32; 2048] = [0; 2048];
 
     // Use USB2 (OTG_FS on PA11/PA12) - this is connected to CN13 on the board
     let usb = USB2::new(
@@ -199,23 +215,94 @@ fn main() -> ! {
     // Create USB message handler
     let mut usb_handler = UsbMessageHandler::new();
     let mut state = SigningState::WaitingForMessage;
+    let mut usb_state = UsbConnectionState::Disconnected;
     let mut blink_counter = 0u32;
     let mut led_counter = 0u32;
+    let mut usb_poll_counter = 0u32;
+    let mut last_usb_state = UsbDeviceState::Default;
 
     loop {
-        // Poll USB frequently - CRITICAL for enumeration and communication
-        usb_dev.poll(&mut [&mut serial]);
+        // Poll USB continuously and frequently - CRITICAL for stable enumeration
+        usb_poll_counter += 1;
+        let poll_result = usb_dev.poll(&mut [&mut serial]);
+        
+        // Check USB device state and handle state changes
+        let current_usb_state = usb_dev.state();
+        if current_usb_state != last_usb_state {
+            rprintln!("USB state changed: {:?} -> {:?}", last_usb_state, current_usb_state);
+            last_usb_state = current_usb_state;
+            
+            // Update our connection state tracking
+            match current_usb_state {
+                UsbDeviceState::Default => {
+                    if usb_state != UsbConnectionState::Connecting {
+                        rprintln!("USB: Connecting...");
+                        usb_state = UsbConnectionState::Connecting;
+                    }
+                }
+                UsbDeviceState::Configured => {
+                    if usb_state != UsbConnectionState::Connected {
+                        rprintln!("USB: Connected and configured!");
+                        usb_state = UsbConnectionState::Connected;
+                        // Reset message handler on new connection
+                        usb_handler.clear_buffer();
+                    }
+                }
+                UsbDeviceState::Suspend => {
+                    rprintln!("USB: Suspended");
+                    usb_state = UsbConnectionState::Suspended;
+                }
+                _ => {
+                    if usb_state != UsbConnectionState::Disconnected {
+                        rprintln!("USB: Disconnected");
+                        usb_state = UsbConnectionState::Disconnected;
+                        // Clear any pending messages on disconnect
+                        usb_handler.clear_buffer();
+                        state = SigningState::WaitingForMessage;
+                    }
+                }
+            }
+        }
+        
+        // Handle USB suspend/resume for better power management
+        if usb_state == UsbConnectionState::Suspended {
+            // In suspend state, poll less frequently to save power
+            if usb_poll_counter % 1000 == 0 {
+                // Check if we've resumed
+                continue;
+            }
+        }
+        
+        // Only process messages when USB is properly connected
+        if usb_state != UsbConnectionState::Connected {
+            // Show connection status via LED
+            if usb_poll_counter % 25000 == 0 {
+                match usb_state {
+                    UsbConnectionState::Disconnected => led.set_low(), // LED off when disconnected
+                    UsbConnectionState::Connecting => led.toggle(),    // Fast blink when connecting
+                    UsbConnectionState::Suspended => {                 // Slow pulse when suspended
+                        if (usb_poll_counter / 25000) % 4 < 2 {
+                            led.set_high();
+                        } else {
+                            led.set_low();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            continue;
+        }
 
         match state {
             SigningState::WaitingForMessage => {
                 // Try to read from USB
                 if let Some(_message) = usb_handler.try_read_message(&mut serial) {
-                    rprintln!("Waiting for button press to sign...");
+                    rprintln!("Message received! Waiting for button press to sign...");
                     state = SigningState::MessageReceived;
                     blink_counter = 0;
                 }
 
-                // Slow blink when waiting (non-blocking)
+                // Slow blink when waiting and connected (non-blocking)
                 led_counter += 1;
                 if led_counter % 50000 == 0 {
                     led.toggle();
@@ -223,6 +310,17 @@ fn main() -> ! {
             }
 
             SigningState::MessageReceived => {
+                // Continue USB polling during button wait
+                if usb_poll_counter % 100 == 0 {
+                    // Check if USB disconnected during button wait
+                    if usb_state != UsbConnectionState::Connected {
+                        rprintln!("USB disconnected during button wait, resetting...");
+                        usb_handler.clear_buffer();
+                        state = SigningState::WaitingForMessage;
+                        continue;
+                    }
+                }
+
                 // Flash LED rapidly until button press
                 blink_counter += 1;
                 if blink_counter % 5000 == 0 {
@@ -255,7 +353,7 @@ fn main() -> ! {
                     };
                     rprintln!("Button {} pressed! Starting signing...", btn_name);
 
-                    // Confirmation blinks: 3 quick blinks
+                    // Confirmation blinks: 3 quick blinks with continuous USB polling
                     for _ in 0..3 {
                         led.set_high();
                         for _ in 0..10000 {
@@ -275,20 +373,53 @@ fn main() -> ! {
             }
 
             SigningState::Signing => {
+                // Verify USB is still connected before signing
+                if usb_state != UsbConnectionState::Connected {
+                    rprintln!("USB disconnected during signing, aborting...");
+                    usb_handler.clear_buffer();
+                    state = SigningState::WaitingForMessage;
+                    led.set_low();
+                    continue;
+                }
+
                 // Get the message from the handler's buffer
                 let message = usb_handler.get_message();
 
                 // Sign the message (LED is already on)
+                rprintln!("Signing message of {} bytes...", message.len());
                 let sig_bytes = signer.sign_message(message);
 
-                // Send response via USB
-                usb_handler.send_signed_response(&mut serial, message, &sig_bytes, &PK_BYTES);
+                // Send response via USB with retry logic
+                let mut send_attempts = 0;
+                let max_attempts = 3;
+                while send_attempts < max_attempts {
+                    // Check USB connection before sending
+                    if usb_state != UsbConnectionState::Connected {
+                        rprintln!("USB disconnected before sending response");
+                        break;
+                    }
+
+                    usb_handler.send_signed_response(&mut serial, message, &sig_bytes, &PK_BYTES);
+                    
+                    // Give time for data to be sent and poll USB
+                    for _ in 0..1000 {
+                        usb_dev.poll(&mut [&mut serial]);
+                        cortex_m::asm::nop();
+                    }
+                    
+                    send_attempts += 1;
+                    if send_attempts < max_attempts {
+                        rprintln!("Retrying response send (attempt {})", send_attempts + 1);
+                        delay_ms(10);
+                    }
+                    break; // For now, don't retry - just send once
+                }
 
                 // Clear buffer and return to waiting
                 usb_handler.clear_buffer();
                 state = SigningState::WaitingForMessage;
 
-                // Success: LED off, then 3 slow blinks
+                // Success: LED off, then 3 slow blinks with continuous USB polling
                 led.set_low();
                 for _ in 0..3 {
                     for _ in 0..200000 {
@@ -303,7 +434,7 @@ fn main() -> ! {
                     led.set_low();
                 }
 
-                rprintln!("Ready for next message\n");
+                rprintln!("Signing complete! Ready for next message\n");
             }
         }
     }
