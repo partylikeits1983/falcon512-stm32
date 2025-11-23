@@ -54,9 +54,13 @@ impl UsbMessageHandler {
                         rprintln!("Message complete: {} bytes", self.message_buffer.len());
                         // Log first few bytes for debugging
                         if self.message_buffer.len() >= 8 {
-                            rprintln!("Message starts with: {:02x} {:02x} {:02x} {:02x}...",
-                                self.message_buffer[0], self.message_buffer[1],
-                                self.message_buffer[2], self.message_buffer[3]);
+                            rprintln!(
+                                "Message starts with: {:02x} {:02x} {:02x} {:02x}...",
+                                self.message_buffer[0],
+                                self.message_buffer[1],
+                                self.message_buffer[2],
+                                self.message_buffer[3]
+                            );
                         }
                         return Some(&self.message_buffer);
                     } else {
@@ -103,18 +107,22 @@ impl UsbMessageHandler {
         public_key: &[u8],
     ) {
         rprintln!("Sending response...");
-        rprintln!("Message: {} bytes, Signature: {} bytes, PubKey: {} bytes",
-                  message.len(), signature.len(), public_key.len());
+        rprintln!(
+            "Message: {} bytes, Signature: {} bytes, PubKey: {} bytes",
+            message.len(),
+            signature.len(),
+            public_key.len()
+        );
 
         // Helper function to send data in chunks with error handling
         let send_chunked = |serial: &mut SerialPort<'a, B>, data: &[u8]| -> bool {
             const CHUNK_SIZE: usize = 32; // Send in smaller chunks for reliability
             let mut offset = 0;
-            
+
             while offset < data.len() {
                 let end = core::cmp::min(offset + CHUNK_SIZE, data.len());
                 let chunk = &data[offset..end];
-                
+
                 match serial.write(chunk) {
                     Ok(written) => {
                         if written == 0 {
@@ -125,7 +133,9 @@ impl UsbMessageHandler {
                     }
                     Err(usb_device::UsbError::WouldBlock) => {
                         // Buffer full, wait a bit
-                        for _ in 0..1000 { cortex_m::asm::nop(); }
+                        for _ in 0..1000 {
+                            cortex_m::asm::nop();
+                        }
                         continue;
                     }
                     Err(e) => {
@@ -133,9 +143,11 @@ impl UsbMessageHandler {
                         return false;
                     }
                 }
-                
+
                 // Small delay between chunks
-                for _ in 0..100 { cortex_m::asm::nop(); }
+                for _ in 0..100 {
+                    cortex_m::asm::nop();
+                }
             }
             true
         };
@@ -152,7 +164,7 @@ impl UsbMessageHandler {
             rprintln!("Failed to send message");
             return;
         }
-        
+
         if !send_chunked(serial, b"\nSIGNATURE:\n") {
             rprintln!("Failed to send signature header");
             return;
@@ -161,7 +173,7 @@ impl UsbMessageHandler {
         // Send signature (hex encoded for readability) in chunks
         let mut hex_buffer = [0u8; 64]; // Buffer for hex chunks
         let mut hex_pos = 0;
-        
+
         for byte in signature.iter() {
             let hex = format_hex(*byte);
             if hex_pos + 2 >= hex_buffer.len() {
@@ -176,7 +188,7 @@ impl UsbMessageHandler {
             hex_buffer[hex_pos + 1] = hex[1];
             hex_pos += 2;
         }
-        
+
         // Send remaining hex data
         if hex_pos > 0 {
             if !send_chunked(serial, &hex_buffer[..hex_pos]) {
@@ -206,7 +218,7 @@ impl UsbMessageHandler {
             hex_buffer[hex_pos + 1] = hex[1];
             hex_pos += 2;
         }
-        
+
         // Send remaining hex data
         if hex_pos > 0 {
             if !send_chunked(serial, &hex_buffer[..hex_pos]) {
