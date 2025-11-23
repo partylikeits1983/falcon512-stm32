@@ -141,7 +141,7 @@ cargo run --release
 # 2. Build and flash STM32 firmware
 cd ../stm32
 cargo build --release
-probe-rs run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/stm32
+cargo run --release
 ```
 
 ### Build Web Interface
