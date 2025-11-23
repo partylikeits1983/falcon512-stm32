@@ -1,34 +1,51 @@
-# Falcon512 STM32 Project
+# Falcon512 STM32 Hardware Wallet
 
-A multi-crate Rust workspace for signing data with Falcon512 post-quantum signatures on STM32 microcontrollers.
+<img src="docs/pqhwtweet.png" alt="Post-Quantum Hardware Wallet Tweet" width="600">
 
-## Project Structure
+A post-quantum hardware wallet implementation using Falcon-512 signatures on STM32 microcontrollers, designed to provide quantum-resistant transaction signing for institutional cryptocurrency custody.
 
-This is a Cargo workspace containing two crates:
+## Overview
 
-```
-falcon512-stm32/
-├── Cargo.toml              # Workspace configuration
-├── KEYGEN_WORKFLOW.md      # Key generation and flashing guide
-├── falcon-rust/            # Falcon512 signature library (no-std)
-│   ├── Cargo.toml
-│   ├── src/
-│   └── tests/
-├── keygen/                 # Laptop tool: generate keys
-│   ├── Cargo.toml
-│   └── src/main.rs
-├── flash_keys/             # Laptop tool: prepare keys for flashing
-│   ├── Cargo.toml
-│   └── src/main.rs
-└── stm32/                  # STM32 firmware implementation
-    ├── Cargo.toml
-    ├── build.rs
-    ├── memory.x            # Includes reserved flash section for keys
-    ├── .cargo/config.toml
-    ├── src/
-    │   └── main.rs
-    └── README.md
-```
+Institutional capital will not fully commit to blockchains until keys and signatures are provably safe against quantum adversaries. Ethereum's current ECDSA and BLS schemes are dead in a post-quantum world: Shor's algorithm makes the elliptic-curve discrete log problem tractable, so any account that has ever broadcast a signed transaction leaks enough information (signature + message) to reconstruct its public key and, once a large quantum computer exists, recover its private key. Recent roadmaps and expert surveys now treat a cryptographically relevant quantum computer as a medium-term risk in roughly a five-to-ten-year window, with non-trivial probability even near five years for state-level actors. In that world, it is rational for an adversary to spend quantum resources to compromise large Bitcoin and Ethereum accounts while shorting the assets, with plausible damage in the multi-trillion-dollar range. "Harvest-now, exploit-later" collection of signatures is therefore a credible threat to long-lived wallets and institutional treasuries.
+
+Hardware wallets are effectively mandatory for institutions, which require dedicated signing modules, strong key isolation, and auditable controls. Yet devices in mass production today (Ledger, Trezor, and peers) still expose only classical ECC DSAs for user keys; there is no widely deployed hardware wallet that supports NIST-standardized post-quantum signatures for transaction signing. "Quantum-ready" offerings mostly use PQC for firmware attestation and update authenticity, not for the DSAs that actually secure on-chain assets.
+
+Falcon-512 is one of the few lattice-based schemes compact enough to be economically viable on-chain: at level-1–equivalent security it offers ~897-byte public keys and ~666-byte signatures, versus roughly 3–4× larger signatures for Dilithium-2 / ML-DSA-44. Those size differences translate directly into higher calldata costs on Ethereum. Falcon is also the better fit as Ethereum "zk-ifies": beyond smaller signatures, Falcon verification has a lighter arithmetic and hashing footprint in zkVMs. Dilithium's verification uses multiple SHAKE invocations and many polynomial multiplications, whereas Falcon uses a single hash of the message to a polynomial (easy to replace with Poseidon2 or RPO in zk settings) and one polynomial multiplication. Each extra SHAKE call and multiplication is costly to arithmetize, so Falcon is substantially cheaper to verify in a zkVM. zkVM systems such as Miden already use a Falcon-512 variant as their default wallet scheme.
+
+This project delivers a post-quantum hardware wallet based on an STM32 microcontroller and a heavily adapted no_std Rust implementation of Falcon-512. Starting from aszepieniec/falcon-rust, we re-engineered the cryptographic core for embedded constraints, replaced standard math dependencies with libm = "0.2", and refactored memory usage to fit safely within the MCU's SRAM. Rust was chosen over the official C reference (pornin/c-fn-dsa) for stronger safety guarantees, tighter control over undefined behavior, and a clearer path toward formal verification. The result is a forward-compatible signing device capable of generating compact, quantum-resistant Falcon-512 signatures today, giving institutions and security-sensitive individuals a realistic way to harden key custody ahead of the quantum transition.
+
+## How It's Made
+
+The prototype is implemented entirely in Rust, from cryptographic core to embedded firmware and host tooling. I began by forking an existing Falcon-512 Rust implementation (aszepieniec/falcon-rust) and converting it to no_std, replacing std dependencies and floating-point/math calls with core and libm = "0.2", and then aggressively optimizing memory usage (explicit scratch buffers, reduced copies, flattened call paths) to fit comfortably within the SRAM constraints of an STM32 microcontroller. This no_std Falcon-512 library is compiled into a bare-metal STM32 firmware that exposes a minimal message-based protocol over the wire: the host sends messages (or hashes), the device returns Falcon-512 signatures, and the private key never leaves the microcontroller. In this hackathon version, on-device key generation and any secure element integration are explicitly out of scope, keys are provisioned externally, and the device is intended as a feasibility demonstration that Falcon signing on a microcontroller is straightforward in practice. On the host side, a Rust frontend handles user interaction, talks to the STM32 over a simple framed transport, and verifies signatures using a WebAssembly module that reuses the same Falcon verifier code compiled to WASM, yielding a single coherent Rust codebase for embedded signing, host orchestration, and client-side verification.
+
+## Demo
+
+**Live Demo**: [https://www.postquantumhardwarewallet.com/](https://www.postquantumhardwarewallet.com/)
+
+<img src="docs/UI.png" alt="Hardware Wallet UI" width="300">
+
+The following demonstration shows the complete signing workflow:
+
+### Step 1: Initiating Signature Request
+<img src="docs/waiting-to-sign.gif" alt="Waiting to Sign" width="400">
+
+### Step 2: User Confirmation
+<img src="docs/waiting-for-click.gif" alt="Waiting for Button Click" width="400">
+
+**Complete Workflow:**
+
+1. **User initiates signing**: Click "Sign" button in the web UI
+   - STM32 enters signing mode with slow blinking LED
+   
+2. **User confirmation**: Press the physical button on the STM32
+   - LED switches to fast blinking, indicating signature generation in progress
+   
+3. **Signature generation**: STM32 computes Falcon-512 signature
+   - LED becomes solid while performing cryptographic operations
+   
+4. **Verification**: Web UI receives signature and verifies it
+   - Signature verification happens in WebAssembly using the same Falcon implementation
+
 
 ## Crates
 
@@ -41,12 +58,34 @@ A fully-featured, no-std implementation of the Falcon post-quantum digital signa
 - Key generation, signing, and verification
 - Serialization/deserialization
 - No heap allocations required
+- Optimized for embedded constraints
 
-**Status**: ✅ Fully implemented
+**Status**: ✅ Fully implemented and optimized for STM32
+
+### falcon-wasm
+
+WebAssembly bindings for Falcon-512 verification in the browser:
+
+- Compiles the same Falcon implementation to WASM
+- Enables client-side signature verification
+- Consistent cryptographic implementation across embedded and web
+
+**Status**: ✅ Complete
+
+### frontend
+
+React-based web interface for interacting with the hardware wallet:
+
+- USB communication with STM32 device
+- Message composition and signing interface
+- Real-time signature verification
+- ERC-7730 structured data support
+
+**Status**: ✅ Complete with USB integration
 
 ### keygen
 
-Laptop tool for generating Falcon512 key pairs. Features:
+Laptop tool for generating Falcon512 key pairs:
 
 - Generates cryptographically secure key pairs
 - Outputs keys as Rust arrays and binary files
@@ -55,95 +94,35 @@ Laptop tool for generating Falcon512 key pairs. Features:
 
 **Status**: ✅ Complete
 
-### flash_keys
+### stm32
 
-Laptop tool for preparing keys for flashing to STM32. Features:
+STM32 firmware that uses pre-generated Falcon512 keys for signing:
 
-- Combines secret and public keys into single binary
-- Formats for reserved flash section
-- Provides flashing instructions for multiple tools
-- Creates 8KB binary matching memory layout
+- USB communication protocol
+- Physical button for user confirmation
+- LED status indicators
+- Secure key storage in flash
+- Hardware RNG support
+
+**Status**: ✅ Complete with USB and user interaction
+
+### usb-client
+
+Command-line client for communicating with the STM32 device:
+
+- Direct USB communication
+- Testing and debugging interface
+- Batch signing operations
 
 **Status**: ✅ Complete
 
-### stm32
-
-STM32 firmware that uses pre-generated Falcon512 keys for signing. Features:
-
-- Reads keys from reserved flash section (0x080FE000)
-- No on-device key generation (saves code space and time)
-- Signing with hardware RNG support
-- Memory configuration for STM32F4/H7
-
-**Status**: ✅ Complete with secure key storage
-
 ## Quick Start
 
-### Complete Workflow (Key Generation + Flashing)
-
-For detailed instructions, see [`KEYGEN_WORKFLOW.md`](KEYGEN_WORKFLOW.md).
+Without an STM32 it will be hard to test the frontend, but you can try out the flow by generating keys in the browser. Try it out here: [https://www.postquantumhardwarewallet.com/](https://www.postquantumhardwarewallet.com/)
 
 ```bash
-# 1. Generate keys on your laptop
-cd keygen
-cargo run --release
-# Creates: secret_key.bin, public_key.bin
-
-# 2. Prepare keys for flashing
-cd ../flash_keys
-cargo run --release -- \
-  --sk-file ../keygen/secret_key.bin \
-  --pk-file ../keygen/public_key.bin
-# Creates: keys.bin
-
-# 3. Flash keys to STM32 reserved section
-probe-rs download --chip STM32H743ZITx \
-  --binary-format Bin --base-address 0x080FE000 keys.bin
-
-# 4. Build and flash firmware
-cd ../stm32
-cargo build --release
-probe-rs run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/stm32
+cargo test --release
 ```
-
-### Build Individual Components
-
-```bash
-# Build all workspace members
-cargo build --release
-
-# Build only falcon-rust library
-cargo build -p falcon-rust --release
-
-# Build only keygen tool
-cargo build -p falcon-keygen --release
-
-# Build only flash_keys tool
-cargo build -p flash-keys --release
-
-# Build only STM32 firmware
-cargo build -p falcon512-stm32 --release
-```
-
-### Run Tests
-
-```bash
-# Test the falcon-rust library
-cargo test -p falcon-rust
-
-# Run with standard library features
-cd falcon-rust
-cargo test
-```
-
-## Hardware Requirements
-
-- **STM32 MCU**: F4 series or higher recommended
-- **Flash**: 200-500 KB
-- **RAM**: 128 KB+ (64 KB minimum)
-- **Debug Probe**: ST-LINK, J-Link, or compatible
-
-## Development Setup
 
 ### Prerequisites
 
@@ -157,130 +136,84 @@ rustup target add thumbv7em-none-eabihf
 # Install probe-rs for flashing/debugging
 cargo install probe-rs --features cli
 
-# Install cargo-binutils for binary inspection
-cargo install cargo-binutils
-rustup component add llvm-tools-preview
+# Install wasm-pack for WebAssembly builds
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 ```
 
-### Build Tools
+### Build and Flash Firmware
 
 ```bash
-# Build workspace
-cargo build
+# 1. Generate keys
+cd keygen
+cargo run --release
+# Creates: secret_key.bin, public_key.bin
 
-# Check code
-cargo check --workspace
-
-# Format code
-cargo fmt --all
-
-# Run clippy
-cargo clippy --workspace
+# 2. Build and flash STM32 firmware
+cd ../stm32
+cargo build --release
+probe-rs run --chip STM32H743ZITx target/thumbv7em-none-eabihf/release/stm32
 ```
 
-## Documentation
+### Build Web Interface
 
-- **falcon-rust**: See `falcon-rust/` directory and [crates.io](https://crates.io/crates/falcon-rust)
-- **STM32 firmware**: See `stm32/README.md`
+```bash
+# 1. Build WebAssembly module
+cd falcon-wasm
+wasm-pack build --target web
+
+# 2. Build and run frontend
+cd ../frontend
+npm install
+npm run dev
+```
+
+## Hardware Requirements
+
+- **STM32 MCU**: H7 series recommended (F4 minimum)
+- **Flash**: 512 KB+
+- **RAM**: 256 KB+ (128 KB minimum)
+- **USB**: Native USB support
+- **Debug Probe**: ST-LINK, J-Link, or compatible
 
 ## Memory Considerations
 
 Falcon512 operations require significant resources:
 
-- **Stack**: 20-32 KB during signing
+- **Stack**: 32-64 KB during signing
 - **Keys**: ~2.2 KB total (secret + public)
 - **Signature**: ~666 bytes
-- **Code size**: 200-500 KB depending on optimization
+- **Code size**: 300-600 KB depending on optimization
 
-Choose STM32 chips with adequate memory (F4 series recommended).
+Choose STM32 chips with adequate memory (H7 series recommended).
 
 ## Performance Notes
 
 - Build with `--release` for production use
 - Enable FPU support (`thumbv7em-none-eabihf` target)
 - LTO is enabled for size optimization
-- Signing takes several seconds on typical STM32F4 @ 168 MHz
+- Signing takes < 1 second on STM32H7 @ 400 MHz
 
-## Use Cases
+## Security Features
 
-- Secure firmware updates
-- Cryptographic authentication
-- Post-quantum security for IoT devices
-- Secure boot implementations
-- Digital signatures for sensor data
-
-## Contributing
-
-When contributing:
-
-1. Maintain no-std compatibility in `falcon-rust`
-2. Test on actual hardware when modifying `stm32`
-3. Update memory requirements if they change
-4. Document any breaking changes
+- **Quantum-resistant signatures**: Falcon-512 provides 108-bit quantum security
+- **Hardware isolation**: Private keys never leave the microcontroller
+- **User confirmation**: Physical button press required for signing
 
 ## License
 
-- **falcon-rust**: MIT License
-- **stm32**: Same as falcon-rust (MIT)
+MIT License - see individual crate directories for details.
 
 ## Resources
 
 - [Falcon Signature Scheme](https://falcon-sign.info/)
 - [NIST PQC Project](https://csrc.nist.gov/projects/post-quantum-cryptography)
-- [Embedded Rust Book](https://rust-embedded.github.io/book/)
-- [cortex-m Quickstart](https://github.com/rust-embedded/cortex-m-quickstart)
-
-## Troubleshooting
-
-### Stack Overflow
-
-If you encounter stack overflow during signing:
-- Increase `_stack_size` in `stm32/memory.x`
-- Use a chip with more RAM
-- Reduce stack usage elsewhere in your application
-
-### Out of Memory
-
-- Use `opt-level = "z"` for smaller code size
-- Enable LTO in release profile
-- Remove unused features/dependencies
-
-### Build Errors
-
-```bash
-# Clean and rebuild
-cargo clean
-cargo build --release
-
-# Update dependencies
-cargo update
-```
-
-## Status
-
-- ✅ Workspace structure configured
-- ✅ falcon-rust library complete
-- ✅ Secure key generation workflow (laptop-based)
-- ✅ Key flashing to reserved flash section
-- ✅ STM32 firmware with flash-based key loading
-- 🔄 Hardware RNG integration (example provided)
-- 🔄 UART/serial output (example provided)
-- 🔄 Real-world application examples (TBD)
-
-## Security Features
-
-- **Secure Key Storage**: Keys stored in reserved flash section, never in source code
-- **Per-Device Keys**: Generate unique keys for each device
-- **No On-Device Key Generation**: Keys generated on secure laptop, not embedded device
-- **Flash Protection**: Compatible with STM32 read-out protection (RDP)
-- **Separation of Concerns**: Key generation separate from signing operations
 
 ## Future Work
 
-- Add examples for different STM32 families (F4, H7, L4, etc.)
-- Implement STM32 security features (RDP, PCROP, TrustZone)
-- Add UART communication examples
-- Performance benchmarking on real hardware
-- Power consumption measurements
-- Integration with secure bootloader
-- External secure element support (ATECC608, etc.)
+- Hardware security module integration
+- Secure element support (ATECC608, etc.)
+- Multi-signature schemes
+- Integration with major blockchain wallets
+- Formal verification of cryptographic implementation
+- Power analysis resistance
+- Side-channel attack mitigation
