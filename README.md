@@ -1,6 +1,6 @@
 # Falcon512 STM32 Hardware Wallet
 
-<img src="docs/pqhwtweet.png" alt="Post-Quantum Hardware Wallet Tweet" width="600">
+<img src="https://raw.githubusercontent.com/riemann/falcon512-stm32/main/docs/pqhwtweet.png" alt="Post-Quantum Hardware Wallet Tweet" width="600">
 
 A post-quantum hardware wallet implementation using Falcon-512 signatures on STM32 microcontrollers, designed to provide quantum-resistant transaction signing for institutional cryptocurrency custody.
 
@@ -22,15 +22,15 @@ The prototype is implemented entirely in Rust, from cryptographic core to embedd
 
 **Live Demo**: [https://www.postquantumhardwarewallet.com/](https://www.postquantumhardwarewallet.com/)
 
-<img src="docs/UI.png" alt="Hardware Wallet UI" width="300">
+<img src="https://raw.githubusercontent.com/riemann/falcon512-stm32/main/docs/UI.png" alt="Hardware Wallet UI" width="300">
 
 The following demonstration shows the complete signing workflow:
 
 ### Step 1: Initiating Signature Request
-<img src="docs/waiting-to-sign.gif" alt="Waiting to Sign" width="400">
+<img src="https://raw.githubusercontent.com/riemann/falcon512-stm32/main/docs/waiting-to-sign.gif" alt="Waiting to Sign" width="400">
 
 ### Step 2: User Confirmation
-<img src="docs/waiting-for-click.gif" alt="Waiting for Button Click" width="400">
+<img src="https://raw.githubusercontent.com/riemann/falcon512-stm32/main/docs/waiting-for-click.gif" alt="Waiting for Button Click" width="400">
 
 **Complete Workflow:**
 
