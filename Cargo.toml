@@ -1,11 +1,22 @@
 [workspace]
 members = [
     "falcon-rust",
-    "stm32",
     "keygen",
     "usb-client",
 ]
+# Exclude frontend (TypeScript) and stm32 (embedded target) from default workspace
+exclude = [
+    "frontend",
+    "stm32",
+]
 resolver = "2"
+
+# Default members for cargo test - only include crates that can run tests on host
+default-members = [
+    "falcon-rust",
+    "keygen",
+    "usb-client",
+]
 
 [profile.release]
 opt-level = 3

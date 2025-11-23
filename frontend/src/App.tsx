@@ -3,17 +3,34 @@
  * STM32 Falcon512 Signing Interface
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
+import { keccak256, toUtf8Bytes } from "ethers";
 
 function App() {
   const [port, setPort] = useState<SerialPort | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [message, setMessage] = useState("Hello, STM32!");
+  const [messageHash, setMessageHash] = useState("");
+  const [rawMessage, setRawMessage] = useState("");
+  const [isRawMode, setIsRawMode] = useState(false);
   const [status, setStatus] = useState("");
   const [signature, setSignature] = useState("");
   const [publicKey, setPublicKey] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // 1inch order data (editable)
+  const [orderData, setOrderData] = useState({
+    from: "0x0000000000000000000000000000000000000001",
+    send: "1000000000",
+    sendToken: "0xA0b86a33E6441E6C7D3E4C5B4B6B8B8B8B8B8B8B",
+    receiveMinimum: "500000000000000000",
+    receiveToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    to: "0x0000000000000000000000000000000000000002",
+  });
+
+  // JSON representation for editing
+  const [editableJson, setEditableJson] = useState("");
 
   const connectToDevice = async () => {
     try {
@@ -63,31 +80,182 @@ function App() {
     }
   };
 
+  // Generate ERC7730 plaintext and hash on component mount
+  useEffect(() => {
+    const generateERC7730Message = () => {
+      // Create ERC7730 plaintext representation
+      let plaintext = "ERC7730 Structured Data:\n\n";
+      plaintext += `Domain:\n`;
+      plaintext += `  Name: 1inch\n`;
+      plaintext += `  Version: 1\n`;
+      plaintext += `  Chain ID: 1\n`;
+      plaintext += `  Verifying Contract: 0x119c71d3bbac22029622cbaec24854d3d32d2828\n\n`;
+
+      plaintext += `Message Type: OrderStructure\n\n`;
+      plaintext += `Message Data:\n`;
+      plaintext += `  Salt: 123456789\n`;
+      plaintext += `  Maker: ${orderData.from}\n`;
+      plaintext += `  Receiver: ${orderData.to}\n`;
+      plaintext += `  Maker Asset: ${orderData.sendToken}\n`;
+      plaintext += `  Taker Asset: ${orderData.receiveToken}\n`;
+      plaintext += `  Making Amount: ${orderData.send}\n`;
+      plaintext += `  Taking Amount: ${orderData.receiveMinimum}\n`;
+      plaintext += `  Maker Traits: 0\n`;
+
+      // Generate keccak256 hash
+      const hash = keccak256(toUtf8Bytes(plaintext));
+      setMessageHash(hash);
+    };
+
+    generateERC7730Message();
+  }, [orderData]);
+
+  // Handle raw message mode
+  const handleRawMessageChange = (message: string) => {
+    setRawMessage(message);
+    if (message.trim() === "") {
+      setIsRawMode(false);
+      setMessageHash("");
+    } else {
+      setIsRawMode(true);
+      // For raw mode, we don't hash - we send the message directly
+      setMessageHash("");
+    }
+  };
+
+  // Convert order data to JSON string for editing
+  const orderToJson = () => {
+    return JSON.stringify(
+      {
+        "1inch Order": {
+          From: orderData.from,
+          Send: `${orderData.send} (Token: ${orderData.sendToken})`,
+          "Receive minimum": `${orderData.receiveMinimum} (Token: ${orderData.receiveToken})`,
+          To: orderData.to,
+        },
+      },
+      null,
+      2,
+    );
+  };
+
+  // Parse JSON back to order data or handle raw text
+  const parseJsonToOrder = (jsonStr: string) => {
+    const trimmed = jsonStr.trim();
+
+    // If empty, clear everything
+    if (trimmed === "") {
+      handleRawMessageChange("");
+      return;
+    }
+
+    // Try to parse as JSON first
+    try {
+      const parsed = JSON.parse(trimmed);
+      const order = parsed["1inch Order"];
+
+      if (order) {
+        // It's valid ERC7730 JSON
+        const sendMatch = order.Send?.match(
+          /^(\d+) \(Token: (0x[a-fA-F0-9]{40})\)$/i,
+        );
+        const receiveMatch = order["Receive minimum"]?.match(
+          /^(\d+) \(Token: (0x[a-fA-F0-9]{40})\)$/i,
+        );
+
+        if (sendMatch && receiveMatch && order.From && order.To) {
+          const newOrderData = {
+            from: order.From,
+            send: sendMatch[1],
+            sendToken: sendMatch[2],
+            receiveMinimum: receiveMatch[1],
+            receiveToken: receiveMatch[2],
+            to: order.To,
+          };
+
+          setOrderData(newOrderData);
+          setIsRawMode(false);
+          setRawMessage("");
+        }
+      } else {
+        // Valid JSON but not ERC7730 format - treat as raw message
+        handleRawMessageChange(trimmed);
+      }
+    } catch (error) {
+      // Not valid JSON - treat as raw text message
+      handleRawMessageChange(trimmed);
+    }
+  };
+
+  // Handle entering edit mode
+  const enterEditMode = () => {
+    if (isRawMode) {
+      setEditableJson(rawMessage);
+    } else {
+      setEditableJson(orderToJson());
+    }
+    setIsEditing(true);
+  };
+
+  // Handle saving edits
+  const saveEdits = () => {
+    parseJsonToOrder(editableJson);
+    setIsEditing(false);
+  };
+
+  // Handle canceling edits
+  const cancelEdits = () => {
+    setIsEditing(false);
+  };
+
   const signMessage = async () => {
     if (!port || !isConnected) {
       setStatus("❌ Not connected to device");
       return;
     }
 
+    let messageToSign = "";
+    let isSigningHash = false;
+
+    if (isRawMode && rawMessage.trim() !== "") {
+      // Raw mode - sign the message directly
+      messageToSign = rawMessage.trim();
+      isSigningHash = false;
+    } else if (!isRawMode && messageHash) {
+      // ERC7730 mode - sign the hash
+      messageToSign = messageHash.startsWith("0x")
+        ? messageHash.slice(2)
+        : messageHash;
+      isSigningHash = true;
+    } else {
+      setStatus("❌ No message available to sign.");
+      return;
+    }
+
     setIsProcessing(true);
-    setStatus("📤 Sending message to STM32...");
+    setStatus(
+      isSigningHash
+        ? "📤 Sending message hash to STM32..."
+        : "📤 Sending raw message to STM32...",
+    );
     setSignature("");
     setPublicKey("");
 
     try {
-      // Send message with newline
       const writer = port.writable?.getWriter();
       if (!writer) {
         throw new Error("Port not writable");
       }
 
-      const messageWithNewline = message + "\n";
+      const messageWithNewline = messageToSign + "\n";
       const encoder = new TextEncoder();
       await writer.write(encoder.encode(messageWithNewline));
       writer.releaseLock();
 
       setStatus(
-        "⏳ Waiting for STM32 response...\n👆 Press button B0 on the STM32 board to sign",
+        isSigningHash
+          ? "⏳ Waiting for STM32 response...\n👆 Press button B0 on the STM32 board to sign the hash"
+          : "⏳ Waiting for STM32 response...\n👆 Press button B0 on the STM32 board to sign the message",
       );
 
       // Read response
@@ -247,7 +415,7 @@ function App() {
       <div className="container">
         <header className="header">
           <h1>🔐 Post Quantum Hardwware Wallet</h1>
-          <p>Sign messages using Falcon512 DSA your STM32 hardware device</p>
+          <p>Sign messages using Falcon512 DSA on your STM32 hardware device</p>
         </header>
 
         {!isWebSerialSupported ? (
@@ -281,24 +449,190 @@ function App() {
               </div>
             </div>
 
-            {/* Message Input Section */}
+            {/* What You're Signing */}
             <div className="card">
-              <h2>Message to Sign</h2>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Enter message to sign..."
-                className="message-input"
-                rows={4}
-              />
-              <button
-                onClick={signMessage}
-                disabled={!isConnected || isProcessing}
-                className="btn-primary"
-              >
-                {isProcessing ? "⏳ Processing..." : "✍️ Sign Message"}
-              </button>
+              <h2>What You're Signing</h2>
+              {!isEditing ? (
+                <div
+                  onClick={enterEditMode}
+                  style={{
+                    backgroundColor: "#2d3748",
+                    color: "#e2e8f0",
+                    padding: "1rem",
+                    borderRadius: "4px",
+                    fontFamily: "monospace",
+                    cursor: "pointer",
+                    border: "2px dashed transparent",
+                    transition: "border-color 0.2s",
+                  }}
+                  onMouseEnter={(e) =>
+                    (e.currentTarget.style.borderColor = "#4a5568")
+                  }
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.borderColor = "transparent")
+                  }
+                >
+                  {isRawMode ? (
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "1.1rem",
+                          fontWeight: "bold",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        Raw Message
+                      </div>
+                      <div
+                        style={{ lineHeight: "1.6", whiteSpace: "pre-wrap" }}
+                      >
+                        {rawMessage || "No message"}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "1.1rem",
+                          fontWeight: "bold",
+                          marginBottom: "1rem",
+                        }}
+                      >
+                        1inch Order
+                      </div>
+                      <div style={{ lineHeight: "1.6" }}>
+                        <div>
+                          <strong>From:</strong> {orderData.from}
+                        </div>
+                        <div>
+                          <strong>Send:</strong> {orderData.send} (Token:{" "}
+                          {orderData.sendToken})
+                        </div>
+                        <div>
+                          <strong>Receive minimum:</strong>{" "}
+                          {orderData.receiveMinimum} (Token:{" "}
+                          {orderData.receiveToken})
+                        </div>
+                        <div>
+                          <strong>To:</strong> {orderData.to}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      fontSize: "0.8rem",
+                      color: "#a0aec0",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    Click to edit •{" "}
+                    {isRawMode
+                      ? "Clear text to use ERC7730 mode"
+                      : "Enter any text for raw message mode"}
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    backgroundColor: "#2d3748",
+                    padding: "1rem",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <textarea
+                    value={editableJson}
+                    onChange={(e) => setEditableJson(e.target.value)}
+                    placeholder="Enter ERC7730 JSON or any raw text message..."
+                    style={{
+                      width: "100%",
+                      height: "200px",
+                      backgroundColor: "#1a202c",
+                      color: "#e2e8f0",
+                      border: "1px solid #4a5568",
+                      borderRadius: "4px",
+                      padding: "0.5rem",
+                      fontFamily: "monospace",
+                      fontSize: "0.9rem",
+                      resize: "vertical",
+                    }}
+                  />
+                  <div
+                    style={{
+                      marginTop: "0.5rem",
+                      display: "flex",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <button
+                      onClick={saveEdits}
+                      style={{
+                        backgroundColor: "#38a169",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        padding: "0.5rem 1rem",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEdits}
+                      style={{
+                        backgroundColor: "#e53e3e",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        padding: "0.5rem 1rem",
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Message Hash Display or Raw Message */}
+            {(messageHash || (isRawMode && rawMessage.trim())) && (
+              <div className="card">
+                <h2>
+                  {isRawMode ? "Raw Message" : "Message Hash (Keccak256)"}
+                </h2>
+                <div className="result-box">
+                  <code className="result-text">
+                    {isRawMode ? rawMessage : messageHash}
+                  </code>
+                  <button
+                    onClick={() =>
+                      navigator.clipboard.writeText(
+                        isRawMode ? rawMessage : messageHash,
+                      )
+                    }
+                    className="btn-copy"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <button
+                  onClick={signMessage}
+                  disabled={!isConnected || isProcessing}
+                  className="btn-primary"
+                  style={{ marginTop: "1rem" }}
+                >
+                  {isProcessing
+                    ? "⏳ Processing..."
+                    : isRawMode
+                      ? "✍️ Sign Message"
+                      : "✍️ Sign Hash"}
+                </button>
+              </div>
+            )}
 
             {/* Status Section */}
             {status && (
@@ -355,8 +689,11 @@ function App() {
                     plugged in and firmware is running.
                   </small>
                 </li>
-                <li>Enter a message to sign</li>
-                <li>Click "Sign Message"</li>
+                <li>Review the 1inch order details in "What You're Signing"</li>
+                <li>
+                  Click "Sign Hash" to sign the keccak256 hash of the ERC7730
+                  plaintext
+                </li>
                 <li>Press button B0 on the STM32 board when prompted</li>
                 <li>
                   Wait for the signature to appear (usually &lt; 1 second)
