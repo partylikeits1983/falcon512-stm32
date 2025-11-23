@@ -19,6 +19,7 @@ function App() {
   const [publicKey, setPublicKey] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [forceHashUpdate, setForceHashUpdate] = useState(0);
 
   // Wallet mode and WASM keys
   const [walletMode, setWalletMode] = useState<"hardware" | "local">(
@@ -170,7 +171,7 @@ function App() {
     };
 
     generateERC7730Message();
-  }, [orderData]);
+  }, [orderData, forceHashUpdate]);
 
   // Handle raw message mode
   const handleRawMessageChange = (message: string) => {
@@ -263,6 +264,10 @@ function App() {
   const saveEdits = () => {
     parseJsonToOrder(editableJson);
     setIsEditing(false);
+
+    // Force hash regeneration by triggering a state update
+    // This ensures the ERC7730 hash changes when save is clicked
+    setForceHashUpdate((prev) => prev + 1);
   };
 
   // Handle canceling edits
@@ -585,7 +590,7 @@ function App() {
     <div className="app">
       <div className="container">
         <header className="header">
-          <h1>🔐 Post Quantum Hardwware Wallet</h1>
+          <h1>🔐 Post Quantum Hardware Wallet</h1>
           <p>Sign messages using Falcon512 DSA on your STM32 hardware device</p>
         </header>
 

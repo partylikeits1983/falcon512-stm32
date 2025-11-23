@@ -33,7 +33,7 @@ body {
 
 /* Header */
 .header {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  background: #1e293b;
   padding: 2rem;
   border-radius: 16px;
   text-align: center;
@@ -43,16 +43,15 @@ body {
 }
 
 .header h1 {
-  font-size: 2rem;
   color: #f1f5f9;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  background: none !important;
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: initial !important;
+  background-clip: initial !important;
 }
 
 .header p {
   color: #94a3b8;
-  font-size: 1rem;
 }
 
 /* Main Content */
