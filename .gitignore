@@ -1,4 +1,7 @@
-/target
+# Rust build artifacts
+target/
+**/target/
+Cargo.lock
 
 # Cryptographic keys - NEVER commit these!
 secret_key.bin

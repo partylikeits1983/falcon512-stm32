@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { TypedDataEncoder, keccak256, toUtf8Bytes } from "ethers";
+import { keccak256, toUtf8Bytes } from "ethers";
 
 // Import the 1inch limit order schema
 import limitOrderSchema from "../1inch-limit-order.json";
@@ -57,25 +57,25 @@ export default function ERC7730MessageBuilder({
   });
 
   // Get the EIP712 types from the schema
-  const getEIP712Types = () => {
-    const schema = limitOrderSchema.context.eip712.schemas[0];
-    return schema.types;
-  };
+  // const getEIP712Types = () => {
+  //   const schema = limitOrderSchema.context.eip712.schemas[0];
+  //   return schema.types;
+  // };
 
   // Generate ERC7730 plaintext representation
   const generatePlaintext = (
     domain: ERC7730Domain,
     message: OrderStructure,
   ): string => {
-    const types = getEIP712Types();
+    // const types = getEIP712Types();
 
     // Create the structured data object
-    const structuredData = {
-      types,
-      primaryType: "OrderStructure",
-      domain,
-      message,
-    };
+    // const structuredData = {
+    //   types,
+    //   primaryType: "OrderStructure",
+    //   domain,
+    //   message,
+    // };
 
     // Generate human-readable plaintext according to ERC7730
     let plaintext = "ERC7730 Structured Data:\n\n";

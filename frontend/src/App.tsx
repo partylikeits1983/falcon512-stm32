@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 import { keccak256, toUtf8Bytes } from "ethers";
+import Falcon, { initFalcon } from "./lib/falcon";
 
 function App() {
   const [port, setPort] = useState<SerialPort | null>(null);
@@ -18,6 +19,12 @@ function App() {
   const [publicKey, setPublicKey] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  
+  // Wallet mode and WASM keys
+  const [walletMode, setWalletMode] = useState<'hardware' | 'local'>('hardware');
+  const [isWasmInitialized, setIsWasmInitialized] = useState(false);
+  const [localKeys, setLocalKeys] = useState<{ publicKey: Uint8Array; secretKey: Uint8Array } | null>(null);
+  const [isGeneratingKeys, setIsGeneratingKeys] = useState(false);
 
   // 1inch order data (editable)
   const [orderData, setOrderData] = useState({
@@ -31,6 +38,54 @@ function App() {
 
   // JSON representation for editing
   const [editableJson, setEditableJson] = useState("");
+
+  // Initialize WASM on component mount
+  useEffect(() => {
+    const initWasm = async () => {
+      try {
+        await initFalcon();
+        setIsWasmInitialized(true);
+      } catch (err) {
+        console.error('Failed to initialize Falcon WASM:', err);
+      }
+    };
+    initWasm();
+  }, []);
+
+  const generateLocalKeys = async () => {
+    if (!isWasmInitialized) return;
+    
+    setIsGeneratingKeys(true);
+    try {
+      const newKeys = await Falcon.generateKeyPair();
+      setLocalKeys(newKeys);
+      setStatus(`✅ Local Falcon512 keys generated!\n📊 Public Key: ${newKeys.publicKey.length} bytes\n📊 Secret Key: ${newKeys.secretKey.length} bytes`);
+    } catch (err) {
+      setStatus(`❌ Failed to generate keys: ${err}`);
+    } finally {
+      setIsGeneratingKeys(false);
+    }
+  };
+
+  const signWithLocalKeys = async (messageToSign: string, _isHash: boolean) => {
+    if (!localKeys) {
+      setStatus("❌ No local keys available");
+      return null;
+    }
+
+    try {
+      const messageBytes = new TextEncoder().encode(messageToSign);
+      const signature = await Falcon.sign(messageBytes, localKeys.secretKey);
+      
+      return {
+        signature: Falcon.bytesToHex(signature),
+        publicKey: Falcon.bytesToHex(localKeys.publicKey)
+      };
+    } catch (err) {
+      setStatus(`❌ Failed to sign with local keys: ${err}`);
+      return null;
+    }
+  };
 
   const connectToDevice = async () => {
     try {
@@ -209,8 +264,14 @@ function App() {
   };
 
   const signMessage = async () => {
-    if (!port || !isConnected) {
-      setStatus("❌ Not connected to device");
+    // Check if we can sign (either connected to hardware or have local keys)
+    if (walletMode === 'hardware' && (!port || !isConnected)) {
+      setStatus("❌ Not connected to hardware device");
+      return;
+    }
+    
+    if (walletMode === 'local' && !localKeys) {
+      setStatus("❌ No local keys generated");
       return;
     }
 
@@ -233,16 +294,49 @@ function App() {
     }
 
     setIsProcessing(true);
+    setSignature("");
+    setPublicKey("");
+
+    if (walletMode === 'local') {
+      // Local WASM signing
+      setStatus(
+        isSigningHash
+          ? "🔐 Signing message hash with local Falcon512 keys..."
+          : "🔐 Signing raw message with local Falcon512 keys...",
+      );
+
+      try {
+        const result = await signWithLocalKeys(messageToSign, isSigningHash);
+        if (result) {
+          setSignature(result.signature);
+          setPublicKey(result.publicKey);
+          setStatus(
+            "✅ Message signed locally!\n📊 Signature: " +
+              result.signature.length / 2 +
+              " bytes\n📊 Public Key: " +
+              result.publicKey.length / 2 +
+              " bytes",
+          );
+        }
+      } catch (error) {
+        setStatus(
+          `❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      } finally {
+        setIsProcessing(false);
+      }
+      return;
+    }
+
+    // Hardware signing (existing STM32 code)
     setStatus(
       isSigningHash
         ? "📤 Sending message hash to STM32..."
         : "📤 Sending raw message to STM32...",
     );
-    setSignature("");
-    setPublicKey("");
 
     try {
-      const writer = port.writable?.getWriter();
+      const writer = port!.writable?.getWriter();
       if (!writer) {
         throw new Error("Port not writable");
       }
@@ -259,7 +353,7 @@ function App() {
       );
 
       // Read response
-      const reader = port.readable?.getReader();
+      const reader = port!.readable?.getReader();
       if (!reader) {
         throw new Error("Port not readable");
       }
@@ -425,28 +519,90 @@ function App() {
           </div>
         ) : (
           <div className="main-content">
-            {/* Connection Section */}
+            {/* Wallet Mode Selection */}
             <div className="card">
-              <h2>USB Connection</h2>
-              <div className="status-row">
-                <span className="status-label">Status:</span>
-                <span
-                  className={`status-badge ${isConnected ? "connected" : "disconnected"}`}
-                >
-                  {isConnected ? "🟢 Connected" : "⚫ Disconnected"}
-                </span>
+              <h2>🔐 Wallet Mode</h2>
+              <div style={{ marginBottom: "1rem" }}>
+                <label style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem", cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="walletMode"
+                    value="hardware"
+                    checked={walletMode === 'hardware'}
+                    onChange={(e) => setWalletMode(e.target.value as 'hardware' | 'local')}
+                    style={{ marginRight: "0.5rem" }}
+                  />
+                  <span>🔌 Hardware Wallet (STM32)</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="walletMode"
+                    value="local"
+                    checked={walletMode === 'local'}
+                    onChange={(e) => setWalletMode(e.target.value as 'hardware' | 'local')}
+                    style={{ marginRight: "0.5rem" }}
+                  />
+                  <span>💻 Local Keys (WASM)</span>
+                </label>
               </div>
-              <div className="button-row">
-                {!isConnected ? (
-                  <button onClick={connectToDevice} className="btn-primary">
-                    Connect to STM32
-                  </button>
-                ) : (
-                  <button onClick={disconnect} className="btn-secondary">
-                    Disconnect
-                  </button>
-                )}
-              </div>
+
+              {walletMode === 'hardware' ? (
+                <>
+                  <div className="status-row">
+                    <span className="status-label">Hardware Status:</span>
+                    <span
+                      className={`status-badge ${isConnected ? "connected" : "disconnected"}`}
+                    >
+                      {isConnected ? "🟢 Connected" : "⚫ Disconnected"}
+                    </span>
+                  </div>
+                  <div className="button-row">
+                    {!isConnected ? (
+                      <button onClick={connectToDevice} className="btn-primary">
+                        Connect to STM32
+                      </button>
+                    ) : (
+                      <button onClick={disconnect} className="btn-secondary">
+                        Disconnect
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="status-row">
+                    <span className="status-label">WASM Status:</span>
+                    <span
+                      className={`status-badge ${isWasmInitialized ? "connected" : "disconnected"}`}
+                    >
+                      {isWasmInitialized ? "🟢 Ready" : "⚫ Loading..."}
+                    </span>
+                  </div>
+                  <div className="status-row">
+                    <span className="status-label">Local Keys:</span>
+                    <span
+                      className={`status-badge ${localKeys ? "connected" : "disconnected"}`}
+                    >
+                      {localKeys ? "🔑 Generated" : "⚫ Not Generated"}
+                    </span>
+                  </div>
+                  <div className="button-row">
+                    <button
+                      onClick={generateLocalKeys}
+                      disabled={!isWasmInitialized || isGeneratingKeys}
+                      className="btn-primary"
+                    >
+                      {isGeneratingKeys ? "⏳ Generating..." : "🔑 Generate Keys"}
+                    </button>
+                    {localKeys && (
+                      <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#666" }}>
+                        <p><strong>Public Key:</strong> {Falcon.bytesToHex(localKeys.publicKey).substring(0, 32)}...</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* What You're Signing */}
@@ -621,15 +777,18 @@ function App() {
                 </div>
                 <button
                   onClick={signMessage}
-                  disabled={!isConnected || isProcessing}
+                  disabled={
+                    (walletMode === 'hardware' && (!isConnected || isProcessing)) ||
+                    (walletMode === 'local' && (!localKeys || isProcessing))
+                  }
                   className="btn-primary"
                   style={{ marginTop: "1rem" }}
                 >
                   {isProcessing
                     ? "⏳ Processing..."
                     : isRawMode
-                      ? "✍️ Sign Message"
-                      : "✍️ Sign Hash"}
+                      ? `✍️ Sign Message ${walletMode === 'local' ? '(Local)' : '(Hardware)'}`
+                      : `✍️ Sign Hash ${walletMode === 'local' ? '(Local)' : '(Hardware)'}`}
                 </button>
               </div>
             )}
@@ -673,35 +832,28 @@ function App() {
               </div>
             )}
 
+
             {/* Instructions */}
             <div className="card info-card">
-              <h3>📋 Instructions</h3>
-              <ol>
-                <li>
-                  Connect your STM32H750B-DK board via USB (CN13 connector)
-                </li>
-                <li>
-                  Click "Connect to STM32"
-                  <br />
-                  <small>
-                    The browser will show only your STM32 device (VID: 0x0483,
-                    PID: 0x5740). If nothing appears, make sure the device is
-                    plugged in and firmware is running.
-                  </small>
-                </li>
-                <li>Review the 1inch order details in "What You're Signing"</li>
-                <li>
-                  Click "Sign Hash" to sign the keccak256 hash of the ERC7730
-                  plaintext
-                </li>
-                <li>Press button B0 on the STM32 board when prompted</li>
-                <li>
-                  Wait for the signature to appear (usually &lt; 1 second)
-                </li>
-              </ol>
-              <p style={{ marginTop: "1rem", fontSize: "0.9rem" }}>
-                <strong>⚠️ Note:</strong> Make sure no other program (like the
-                Rust usb-client) is using the serial port.
+              <h3>📋 Quick Start</h3>
+              
+              <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ marginBottom: "0.5rem" }}>🔌 Hardware</h4>
+                  <p style={{ fontSize: "0.9rem", lineHeight: "1.4" }}>
+                    Connect STM32 → Select Hardware mode → Generate/sign with physical button
+                  </p>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <h4 style={{ marginBottom: "0.5rem" }}>💻 Local</h4>
+                  <p style={{ fontSize: "0.9rem", lineHeight: "1.4" }}>
+                    Select Local mode → Generate keys → Sign instantly in browser
+                  </p>
+                </div>
+              </div>
+
+              <p style={{ marginTop: "1rem", fontSize: "0.8rem", color: "#666", backgroundColor: "#f8f9fa", padding: "0.5rem", borderRadius: "4px" }}>
+                <strong>⚠️ Note:</strong> Hardware mode requires STM32H750B-DK. Local mode uses post-quantum Falcon512 in WASM.
               </p>
             </div>
           </div>
