@@ -193,10 +193,15 @@ Choose STM32 chips with adequate memory (H7 series recommended).
 
 MIT License - see individual crate directories for details.
 
-## Resources
+## References
 
 - [Falcon Signature Scheme](https://falcon-sign.info/)
 - [NIST PQC Project](https://csrc.nist.gov/projects/post-quantum-cryptography)
+- [Falcon512 EVM Pre-Compile Discussion](https://ethereum-magicians.org/t/eip-7619-falcon-512-precompiled-generic-signature-verifier/18569)
+- [Falcon512 Blog Post on PSE](https://pse.dev/blog/post-quantum-signature-aggregation-with-falcon-and-LaBRADOR)
+- [Falcon on ARM Cortex M4 Paper](https://eprint.iacr.org/2025/123.pdf)
+- [Falcon512 Solidity Verifier Smart Contract](https://github.com/lacchain/sol-falcon-verify)
+- [MidenVM Falcon512 Usage (RPO Variant)](https://github.com/0xMiden/miden-vm/blob/next/stdlib/asm/crypto/dsa/rpo_falcon512.masm)
 
 ## Future Work
 
