@@ -6,23 +6,23 @@ export default defineConfig({
   plugins: [react()],
   server: {
     fs: {
-      allow: ['..']
-    }
+      allow: [".."],
+    },
   },
   optimizeDeps: {
-    exclude: ['falcon_wasm']
+    exclude: ["falcon_wasm"],
   },
   build: {
-    target: 'esnext',
+    target: "esnext",
     rollupOptions: {
       external: [],
       output: {
-        manualChunks: undefined
-      }
-    }
+        manualChunks: undefined,
+      },
+    },
   },
   worker: {
-    format: 'es'
+    format: "es",
   },
-  assetsInclude: ['**/*.wasm']
+  assetsInclude: ["**/*.wasm"],
 });

@@ -19,11 +19,16 @@ function App() {
   const [publicKey, setPublicKey] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  
+
   // Wallet mode and WASM keys
-  const [walletMode, setWalletMode] = useState<'hardware' | 'local'>('hardware');
+  const [walletMode, setWalletMode] = useState<"hardware" | "local">(
+    "hardware",
+  );
   const [isWasmInitialized, setIsWasmInitialized] = useState(false);
-  const [localKeys, setLocalKeys] = useState<{ publicKey: Uint8Array; secretKey: Uint8Array } | null>(null);
+  const [localKeys, setLocalKeys] = useState<{
+    publicKey: Uint8Array;
+    secretKey: Uint8Array;
+  } | null>(null);
   const [isGeneratingKeys, setIsGeneratingKeys] = useState(false);
 
   // 1inch order data (editable)
@@ -46,7 +51,7 @@ function App() {
         await initFalcon();
         setIsWasmInitialized(true);
       } catch (err) {
-        console.error('Failed to initialize Falcon WASM:', err);
+        console.error("Failed to initialize Falcon WASM:", err);
       }
     };
     initWasm();
@@ -54,12 +59,14 @@ function App() {
 
   const generateLocalKeys = async () => {
     if (!isWasmInitialized) return;
-    
+
     setIsGeneratingKeys(true);
     try {
       const newKeys = await Falcon.generateKeyPair();
       setLocalKeys(newKeys);
-      setStatus(`✅ Local Falcon512 keys generated!\n📊 Public Key: ${newKeys.publicKey.length} bytes\n📊 Secret Key: ${newKeys.secretKey.length} bytes`);
+      setStatus(
+        `✅ Local Falcon512 keys generated!\n📊 Public Key: ${newKeys.publicKey.length} bytes\n📊 Secret Key: ${newKeys.secretKey.length} bytes`,
+      );
     } catch (err) {
       setStatus(`❌ Failed to generate keys: ${err}`);
     } finally {
@@ -76,10 +83,10 @@ function App() {
     try {
       const messageBytes = new TextEncoder().encode(messageToSign);
       const signature = await Falcon.sign(messageBytes, localKeys.secretKey);
-      
+
       return {
         signature: Falcon.bytesToHex(signature),
-        publicKey: Falcon.bytesToHex(localKeys.publicKey)
+        publicKey: Falcon.bytesToHex(localKeys.publicKey),
       };
     } catch (err) {
       setStatus(`❌ Failed to sign with local keys: ${err}`);
@@ -265,12 +272,12 @@ function App() {
 
   const signMessage = async () => {
     // Check if we can sign (either connected to hardware or have local keys)
-    if (walletMode === 'hardware' && (!port || !isConnected)) {
+    if (walletMode === "hardware" && (!port || !isConnected)) {
       setStatus("❌ Not connected to hardware device");
       return;
     }
-    
-    if (walletMode === 'local' && !localKeys) {
+
+    if (walletMode === "local" && !localKeys) {
       setStatus("❌ No local keys generated");
       return;
     }
@@ -297,7 +304,7 @@ function App() {
     setSignature("");
     setPublicKey("");
 
-    if (walletMode === 'local') {
+    if (walletMode === "local") {
       // Local WASM signing
       setStatus(
         isSigningHash
@@ -310,13 +317,48 @@ function App() {
         if (result) {
           setSignature(result.signature);
           setPublicKey(result.publicKey);
-          setStatus(
-            "✅ Message signed locally!\n📊 Signature: " +
-              result.signature.length / 2 +
-              " bytes\n📊 Public Key: " +
-              result.publicKey.length / 2 +
-              " bytes",
-          );
+
+          // Verify the signature using WASM
+          try {
+            setStatus(
+              "✅ Message signed locally!\n🔍 Verifying signature...\n� Signature: " +
+                result.signature.length / 2 +
+                " bytes\n📊 Public Key: " +
+                result.publicKey.length / 2 +
+                " bytes",
+            );
+
+            const messageBytes = new TextEncoder().encode(messageToSign);
+            const signatureBytes = Falcon.hexToBytes(result.signature);
+            const publicKeyBytes = Falcon.hexToBytes(result.publicKey);
+            const isValid = await Falcon.verify(
+              messageBytes,
+              signatureBytes,
+              publicKeyBytes,
+            );
+
+            const verificationText = isValid
+              ? "✅ Signature Verified!"
+              : "❌ Signature Verification Failed!";
+            setStatus(
+              "✅ Message signed locally!\n" +
+                verificationText +
+                "\n📊 Signature: " +
+                result.signature.length / 2 +
+                " bytes\n📊 Public Key: " +
+                result.publicKey.length / 2 +
+                " bytes",
+            );
+          } catch (verifyError) {
+            setStatus(
+              "✅ Message signed locally!\n❌ Signature Verification Failed!\n📊 Signature: " +
+                result.signature.length / 2 +
+                " bytes\n📊 Public Key: " +
+                result.publicKey.length / 2 +
+                " bytes\n⚠️ Verification error: " +
+                verifyError,
+            );
+          }
         }
       } catch (error) {
         setStatus(
@@ -486,13 +528,48 @@ function App() {
 
       setSignature(sig);
       setPublicKey(pk);
-      setStatus(
-        "✅ Signature received!\n📊 Signature: " +
-          sig.length / 2 +
-          " bytes\n📊 Public Key: " +
-          pk.length / 2 +
-          " bytes",
-      );
+
+      // Verify the signature using WASM
+      try {
+        setStatus(
+          "✅ Signature received!\n🔍 Verifying signature...\n📊 Signature: " +
+            sig.length / 2 +
+            " bytes\n📊 Public Key: " +
+            pk.length / 2 +
+            " bytes",
+        );
+
+        const messageBytes = new TextEncoder().encode(messageToSign);
+        const signatureBytes = Falcon.hexToBytes(sig);
+        const publicKeyBytes = Falcon.hexToBytes(pk);
+        const isValid = await Falcon.verify(
+          messageBytes,
+          signatureBytes,
+          publicKeyBytes,
+        );
+
+        const verificationText = isValid
+          ? "✅ Signature Verified!"
+          : "❌ Signature Verification Failed!";
+        setStatus(
+          "✅ Signature received!\n" +
+            verificationText +
+            "\n📊 Signature: " +
+            sig.length / 2 +
+            " bytes\n📊 Public Key: " +
+            pk.length / 2 +
+            " bytes",
+        );
+      } catch (verifyError) {
+        setStatus(
+          "✅ Signature received!\n❌ Signature Verification Failed!\n📊 Signature: " +
+            sig.length / 2 +
+            " bytes\n📊 Public Key: " +
+            pk.length / 2 +
+            " bytes\n⚠️ Verification error: " +
+            verifyError,
+        );
+      }
     } catch (error) {
       setStatus(
         `❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -523,31 +600,48 @@ function App() {
             <div className="card">
               <h2>🔐 Wallet Mode</h2>
               <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "flex", alignItems: "center", marginBottom: "0.5rem", cursor: "pointer" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginBottom: "0.5rem",
+                    cursor: "pointer",
+                  }}
+                >
                   <input
                     type="radio"
                     name="walletMode"
                     value="hardware"
-                    checked={walletMode === 'hardware'}
-                    onChange={(e) => setWalletMode(e.target.value as 'hardware' | 'local')}
+                    checked={walletMode === "hardware"}
+                    onChange={(e) =>
+                      setWalletMode(e.target.value as "hardware" | "local")
+                    }
                     style={{ marginRight: "0.5rem" }}
                   />
                   <span>🔌 Hardware Wallet (STM32)</span>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", cursor: "pointer" }}>
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                >
                   <input
                     type="radio"
                     name="walletMode"
                     value="local"
-                    checked={walletMode === 'local'}
-                    onChange={(e) => setWalletMode(e.target.value as 'hardware' | 'local')}
+                    checked={walletMode === "local"}
+                    onChange={(e) =>
+                      setWalletMode(e.target.value as "hardware" | "local")
+                    }
                     style={{ marginRight: "0.5rem" }}
                   />
                   <span>💻 Local Keys (WASM)</span>
                 </label>
               </div>
 
-              {walletMode === 'hardware' ? (
+              {walletMode === "hardware" ? (
                 <>
                   <div className="status-row">
                     <span className="status-label">Hardware Status:</span>
@@ -593,11 +687,26 @@ function App() {
                       disabled={!isWasmInitialized || isGeneratingKeys}
                       className="btn-primary"
                     >
-                      {isGeneratingKeys ? "⏳ Generating..." : "🔑 Generate Keys"}
+                      {isGeneratingKeys
+                        ? "⏳ Generating..."
+                        : "🔑 Generate Keys"}
                     </button>
                     {localKeys && (
-                      <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#666" }}>
-                        <p><strong>Public Key:</strong> {Falcon.bytesToHex(localKeys.publicKey).substring(0, 32)}...</p>
+                      <div
+                        style={{
+                          marginTop: "0.5rem",
+                          fontSize: "0.8rem",
+                          color: "#666",
+                        }}
+                      >
+                        <p>
+                          <strong>Public Key:</strong>{" "}
+                          {Falcon.bytesToHex(localKeys.publicKey).substring(
+                            0,
+                            32,
+                          )}
+                          ...
+                        </p>
                       </div>
                     )}
                   </div>
@@ -778,8 +887,9 @@ function App() {
                 <button
                   onClick={signMessage}
                   disabled={
-                    (walletMode === 'hardware' && (!isConnected || isProcessing)) ||
-                    (walletMode === 'local' && (!localKeys || isProcessing))
+                    (walletMode === "hardware" &&
+                      (!isConnected || isProcessing)) ||
+                    (walletMode === "local" && (!localKeys || isProcessing))
                   }
                   className="btn-primary"
                   style={{ marginTop: "1rem" }}
@@ -787,8 +897,8 @@ function App() {
                   {isProcessing
                     ? "⏳ Processing..."
                     : isRawMode
-                      ? `✍️ Sign Message ${walletMode === 'local' ? '(Local)' : '(Hardware)'}`
-                      : `✍️ Sign Hash ${walletMode === 'local' ? '(Local)' : '(Hardware)'}`}
+                      ? `✍️ Sign Message ${walletMode === "local" ? "(Local)" : "(Hardware)"}`
+                      : `✍️ Sign Hash ${walletMode === "local" ? "(Local)" : "(Hardware)"}`}
                 </button>
               </div>
             )}
@@ -832,28 +942,39 @@ function App() {
               </div>
             )}
 
-
             {/* Instructions */}
             <div className="card info-card">
               <h3>📋 Quick Start</h3>
-              
+
               <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
                 <div style={{ flex: 1 }}>
                   <h4 style={{ marginBottom: "0.5rem" }}>🔌 Hardware</h4>
                   <p style={{ fontSize: "0.9rem", lineHeight: "1.4" }}>
-                    Connect STM32 → Select Hardware mode → Generate/sign with physical button
+                    Connect STM32 → Select Hardware mode → Generate/sign with
+                    physical button
                   </p>
                 </div>
                 <div style={{ flex: 1 }}>
                   <h4 style={{ marginBottom: "0.5rem" }}>💻 Local</h4>
                   <p style={{ fontSize: "0.9rem", lineHeight: "1.4" }}>
-                    Select Local mode → Generate keys → Sign instantly in browser
+                    Select Local mode → Generate keys → Sign instantly in
+                    browser
                   </p>
                 </div>
               </div>
 
-              <p style={{ marginTop: "1rem", fontSize: "0.8rem", color: "#666", backgroundColor: "#f8f9fa", padding: "0.5rem", borderRadius: "4px" }}>
-                <strong>⚠️ Note:</strong> Hardware mode requires STM32H750B-DK. Local mode uses post-quantum Falcon512 in WASM.
+              <p
+                style={{
+                  marginTop: "1rem",
+                  fontSize: "0.8rem",
+                  color: "#666",
+                  backgroundColor: "#f8f9fa",
+                  padding: "0.5rem",
+                  borderRadius: "4px",
+                }}
+              >
+                <strong>⚠️ Note:</strong> Hardware mode requires STM32H750B-DK.
+                Local mode uses post-quantum Falcon512 in WASM.
               </p>
             </div>
           </div>

@@ -2,8 +2,8 @@ import init, {
   FalconKeyPair,
   sign_message,
   verify_signature,
-  generate_keypair_from_random
-} from '../falcon-wasm/falcon_wasm.js';
+  generate_keypair_from_random,
+} from "../falcon-wasm/falcon_wasm.js";
 
 let wasmInitialized = false;
 
@@ -29,30 +29,33 @@ export class Falcon {
    */
   static async generateKeyPair(seed?: Uint8Array): Promise<FalconKeys> {
     await this.ensureInit();
-    
+
     let keyPair: FalconKeyPair;
-    
+
     if (seed) {
       if (seed.length !== 32) {
-        throw new Error('Seed must be exactly 32 bytes');
+        throw new Error("Seed must be exactly 32 bytes");
       }
       keyPair = new FalconKeyPair(seed);
     } else {
       keyPair = generate_keypair_from_random();
     }
-    
+
     return {
       publicKey: new Uint8Array(keyPair.public_key),
-      secretKey: new Uint8Array(keyPair.secret_key)
+      secretKey: new Uint8Array(keyPair.secret_key),
     };
   }
 
   /**
    * Sign a message with a Falcon512 secret key
    */
-  static async sign(message: Uint8Array, secretKey: Uint8Array): Promise<Uint8Array> {
+  static async sign(
+    message: Uint8Array,
+    secretKey: Uint8Array,
+  ): Promise<Uint8Array> {
     await this.ensureInit();
-    
+
     const signature = sign_message(message, secretKey);
     return new Uint8Array(signature.bytes);
   }
@@ -60,9 +63,13 @@ export class Falcon {
   /**
    * Verify a Falcon512 signature
    */
-  static async verify(message: Uint8Array, signature: Uint8Array, publicKey: Uint8Array): Promise<boolean> {
+  static async verify(
+    message: Uint8Array,
+    signature: Uint8Array,
+    publicKey: Uint8Array,
+  ): Promise<boolean> {
     await this.ensureInit();
-    
+
     return verify_signature(message, signature, publicKey);
   }
 
@@ -82,8 +89,8 @@ export class Falcon {
    */
   static bytesToHex(bytes: Uint8Array): string {
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
   }
 }
 
