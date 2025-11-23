@@ -4,7 +4,7 @@
 
 **Live Demo**: [https://www.postquantumhardwarewallet.com/](https://www.postquantumhardwarewallet.com/)
 
-A post-quantum hardware wallet implementation using Falcon-512 signatures on STM32 microcontrollers, designed to provide quantum-resistant transaction signing for institutional cryptocurrency custody.
+A Rust-based Falcon-512 post-quantum hardware wallet on STM32, providing quantum-resistant transaction signing for institutional cryptocurrency custody.
 
 ## Abstract 
 
